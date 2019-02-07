@@ -1,0 +1,1 @@
+IDRViewer.config = {"pagecount":1,"title":"PowerPoint 演示文稿","author":"李 颉","fileName":"cv_info_En_complet.pdf","bounds":[[909,6149]],"bookmarks":[],"thumbnailType":"jpg","pageType":"html","pageLabels":[]};
