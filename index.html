@@ -1,1036 +1,1013 @@
-<!DOCTYPE html>
+<!DOCTYPE html >
 <html lang="en">
 <head>
-<!-- v1.5.1 -->
 <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>"CV-LIJie"</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.1/css/font-awesome.min.css">
-<link rel="stylesheet" type="text/css" href="assets/idrviewer.css">
-<script src="assets/idrviewer.js" type="text/javascript"></script>
-<script src="assets/idrviewer.querystring-navigation.js"></script>
-<script src="assets/idrviewer.fullscreen.js"></script>
-<script src="assets/idrviewer.search.js"></script>
-<!--*-->
-<script type="text/javascript">
-(function() {
-    "use strict";
-    var Button = {},
-        pageLabels = [];
-
-    /**
-     * Shorthand helper function to getElementById
-     * @param id
-     * @returns {Element}
-     */
-    var d = function (id) {
-        return document.getElementById(id);
-    };
-
-    var ClassHelper = (function() {
-        return {
-            addClass: function(ele, name) {
-                var classes = ele.className.length !== 0 ? ele.className.split(" ") : [];
-                var index = classes.indexOf(name);
-                if (index === -1) {
-                    classes.push(name);
-                    ele.className = classes.join(" ");
-                }
-            },
-
-            removeClass: function(ele, name) {
-                var classes = ele.className.length !== 0 ? ele.className.split(" ") : [];
-                var index = classes.indexOf(name);
-                if (index !== -1) {
-                    classes.splice(index, 1);
-                }
-                ele.className = classes.join(" ");
-            },
-
-            toggleClass: function(ele, name) {
-                var classes = ele.className.length !== 0 ? ele.className.split(" ") : [];
-                var index = classes.indexOf(name);
-                var wasClassAdded;
-                if (index === -1) {
-                    classes.push(name);
-                    wasClassAdded = true;
-                } else {
-                    classes.splice(index, 1);
-                    wasClassAdded = false;
-                }
-                ele.className = classes.join(" ");
-                return wasClassAdded;
-            }
-        };
-    })();
-
-    /**
-     * Encapsulation of sidebar functionality
-     */
-    var Sidebar = (function () {
-
-        var Sidebar = {},
-            loadedThumbsArray = [],
-            thumbnailPositions = [],
-            lastScroll = 0,
-            sidebar,
-            thumbnailBar,
-            imageType,
-            scrollSidebar = true,
-            thumbnailPanel,
-            bookmarkPanel,
-            searchPanel,
-            isSearchLoaded,
-            searchInput,
-            thumbnailScrollPt = 0,
-            bookmarkScrollPt = 0,
-            searchScrollPt = 0,
-            curPg,
-            pgCount,
-            MAX_THUMBNAIL_WIDTH = 160,
-            MAX_THUMBNAIL_HEIGHT = 200;
-
-        /**
-         * Performs the setup for the sidebar
-         * @param initialPage Current page
-         * @param pageCount Page count
-         * @param bounds Page bounds array
-         * @param thumbnailType Image type used for thumbnails
-         * @param bookmarks Object containing any bookmarks
-         */
-        Sidebar.setup = function (initialPage, pageCount, bounds, thumbnailType, bookmarks) {
-
-            curPg = initialPage;
-            pgCount = pageCount;
-            Button.outlines = d('btnOutlines');
-            Button.thumbnails = d('btnThumbnails');
-            Button.search = d('btnSearch');
-            d('btnSideToggle').onclick = function () {
-                Sidebar.toggleSidebar();
-            };
-            Button.outlines.onclick = function () {
-                Sidebar.switchToBookmarks();
-            };
-            Button.thumbnails.onclick = function () {
-                Sidebar.switchToThumbnails();
-            };
-            Button.search.onclick = function () {
-                Sidebar.switchToSearch();
-            };
-
-            thumbnailBar = d('leftContent');
-            sidebar = d('left');
-            thumbnailPanel = d('thumbnailPanel');
-            bookmarkPanel = d('outlinePanel');
-            searchPanel = d('searchPanel');
-            searchInput = d('searchInput');
-            imageType = thumbnailType;
-
-            loadThumbnailFrames(bounds);
-            // Initialise loaded array
-            for (var i = 0; i < pgCount; i++) {
-                loadedThumbsArray[i] = false;
-            }
-
-            Sidebar.switchToThumbnails();
-
-            thumbnailBar.addEventListener("scroll", handleThumbnailBarScroll);
-
-            if (bookmarks.length > 0) {
-                Sidebar.setBookmarks(bookmarks);
-            }
-            bookmarkScrollPt = bookmarkPanel.scrollTop;
-            searchScrollPt = searchPanel.scrollTop;
-            thumbnailBar.scrollTop = thumbnailScrollPt;
-        };
-
-        Sidebar.openSidebar = function() {
-            if (sidebar.className.indexOf("open") === -1) {
-                Sidebar.toggleSidebar();
-            }
-        };
-
-        /**
-         * Toggle the sidebar open and closed
-         */
-        Sidebar.toggleSidebar = function () {
-            if (ClassHelper.toggleClass(sidebar, "open")) {
-                loadVisibleThumbnails();
-            }
-        };
-
-        /**
-         * Display the thumbnail panel in the sidebar
-         */
-        Sidebar.switchToThumbnails = function () {
-            if (bookmarkPanel.className == "visible") {
-                bookmarkScrollPt = thumbnailBar.scrollTop;
-            }
-            if (searchPanel.className == "visible") {
-                searchScrollPt = thumbnailBar.scrollTop;
-            }
-
-            thumbnailPanel.className = "visible";
-            bookmarkPanel.className = "hidden";
-            searchPanel.className = "hidden";
-            if (sidebar.className.indexOf("open") !== -1) {
-                loadVisibleThumbnails();
-                updateThumbnailPanelToCurrentPage();
-            }
-            Button.thumbnails.className = 'disabled btn';
-            Button.outlines.className = 'btn';
-            Button.search.className = 'btn';
-        };
-
-        /**
-         * Display the bookmarks panel in the sidebar
-         */
-        Sidebar.switchToBookmarks = function () {
-            if (searchPanel.className == "visible") {
-                searchScrollPt = thumbnailBar.scrollTop;
-            }
-            if (thumbnailPanel.className == "visible") {
-                thumbnailScrollPt = thumbnailBar.scrollTop;
-            }
-
-            thumbnailPanel.className = "hidden";
-            bookmarkPanel.className = "visible";
-            searchPanel.className = "hidden";
-            Button.thumbnails.className = 'btn';
-            Button.outlines.className = 'disabled btn';
-            Button.search.className = 'btn';
-            thumbnailBar.scrollTop = bookmarkScrollPt;
-        };
-
-        Sidebar.switchToSearch = function() {
-            if (bookmarkPanel.className == "visible") {
-                bookmarkScrollPt = thumbnailBar.scrollTop;
-            }
-            if (thumbnailPanel.className == "visible") {
-                thumbnailScrollPt = thumbnailBar.scrollTop;
-            }
-
-            thumbnailPanel.className = "hidden";
-            bookmarkPanel.className = "hidden";
-            searchPanel.className = "visible";
-            Button.thumbnails.className = 'btn';
-            Button.outlines.className = 'btn';
-            Button.search.className = 'disabled btn';
-
-            var loadListener = function(loaded) {
-                if (loaded) {
-                    searchInput.value = "";
-                    searchInput.disabled = "";
-                    searchInput.focus();
-                } else {
-                    searchInput.value = "Search not available.";
-                }
-            };
-            var progressListener = function(percentageLoaded) {
-                searchInput.value = "Loading (" + percentageLoaded + "%)";
-            };
-            if (!isSearchLoaded) {
-                IDRViewer.loadSearch(loadListener, progressListener);
-            }
-            searchInput.focus();
-            thumbnailBar.scrollTop = searchScrollPt;
-        };
-
-        /**
-         * Load the frames for all the thumbnails
-         * @param bounds Page bound array
-         */
-        var loadThumbnailFrames = function (bounds) {
-            var heights = [];
-            // Calculate height for max width of 160px and max height of 200px
-            for (var i = 0; i < bounds.length; i++) {
-                var height = Math.floor(bounds[i][1] * (MAX_THUMBNAIL_WIDTH / bounds[i][0]));
-                heights[i] = (bounds[i][0] > bounds[i][1] || height <= MAX_THUMBNAIL_HEIGHT) ? height : MAX_THUMBNAIL_HEIGHT;
-            }
-
-            function makeThumbnailClickHandler(pg) {
-                return function() {
-                    scrollSidebar = false;
-                    IDRViewer.goToPage(pg);
-                    return false;
-                };
-            }
-
-            for (var page = 1; page <= bounds.length; page++) {
-                var ele = document.createElement("a");
-                ele.style.height = heights[page - 1] + "px";
-                ele.className = "thumbnail";
-                ele.href = "?page=" + page;
-                ele.id = "thumb" + page;
-                ele.onclick = makeThumbnailClickHandler(page);
-                ele.setAttribute('title', 'Page ' + page);
-                var margin = Math.floor((heights[page - 1] - 42) / 2);
-                ele.innerHTML = '<div class="spinner" style="margin-top: ' + margin + 'px;"></div>';
-                thumbnailPanel.appendChild(ele);
-            }
-
-            for (page = 1; page <= bounds.length; page++) {
-                thumbnailPositions[page - 1] = thumbnailPanel.children[page - 1].offsetTop;
-            }
-        };
-
-        var handleThumbnailBarScroll = function () {
-            var scrollTop = thumbnailBar.scrollTop;
-            lastScroll = scrollTop;
-            showVisibleSpinners();
-            setTimeout(function () {
-                loadVisibleThumbnails(scrollTop);
-            }, 500);
-        };
-
-        var showVisibleSpinners = function() {
-            var startY = thumbnailBar.scrollTop;
-            var endY = startY + thumbnailBar.clientHeight;
-            for (var index = 0; index < pgCount; index++) {
-                if (!loadedThumbsArray[index]) {
-                    if (thumbnailPositions[index] + MAX_THUMBNAIL_WIDTH > startY && thumbnailPositions[index] < endY) {
-                        ClassHelper.addClass(thumbnailPanel.children[index].firstChild, "spinning");
-                    } else {
-                        ClassHelper.removeClass(thumbnailPanel.children[index].firstChild, "spinning");
-                    }
-                }
-            }
-        };
-
-        var loadVisibleThumbnails = function (scrollTop) {
-            if (typeof scrollTop !== 'undefined' && scrollTop != lastScroll)
-                return;
-
-            // load thumbs in view
-            for (var thumbIndex = 0; thumbIndex < pgCount; thumbIndex++) {
-                if (!loadedThumbsArray[thumbIndex]) {
-                    var curThumb = thumbnailPanel.children[thumbIndex];
-                    // Bails out of the loop when the next thumbnail is below the viewable area
-                    if (curThumb.offsetTop > thumbnailBar.scrollTop + thumbnailBar.clientHeight) {
-                        break;
-                    }
-                    if (curThumb.offsetTop + curThumb.clientHeight > thumbnailBar.scrollTop) {
-                        curThumb.innerHTML = '<img src="thumbnails/' + (thumbIndex + 1) + '.' + imageType + '" />';
-                        loadedThumbsArray[thumbIndex] = true;
-                    }
-                }
-            }
-        };
-
-        /**
-         * Scrolls the thumbnail bar to a specific page and adds currentPageThumbnail class.
-         * @param page Page to scroll to
-         */
-        Sidebar.handlePageChange = function (page) {
-            curPg = page;
-            if (thumbnailPanel.className === "visible") {
-                updateThumbnailPanelToCurrentPage();
-            }
-            scrollSidebar = true;
-        };
-
-        var updateThumbnailPanelToCurrentPage = function() {
-            var curThumb = thumbnailPanel.children[curPg - 1];
-            if (curThumb.className !== "thumbnail currentPageThumbnail") {
-
-                for (var i = 0; i < pgCount; i++) {
-                    thumbnailPanel.children[i].className = "thumbnail";
-                }
-
-                curThumb.className = "thumbnail currentPageThumbnail";
-
-                if (scrollSidebar) {
-                    thumbnailBar.scrollTop = thumbnailBar.scrollTop + curThumb.getBoundingClientRect().top - d('leftContent').getBoundingClientRect().top;
-                }
-            }
-        };
-
-        Sidebar.setBookmarks = function (bookmarks) {
-            ClassHelper.addClass(sidebar, 'hasBookmarks');
-            addBookmark(bookmarkPanel, bookmarks);
-        };
-
-        var addBookmark = function (container, bookmarks) {
-            var outer = document.createElement('ul');
-
-            var makeBookmarkClickHandler = function(pg, zoom) {
-                return function() {
-                    IDRViewer.goToPage(parseInt(pg), zoom);
-                };
-            };
-            for (var i = 0; i < bookmarks.length; i++) {
-                var bookmark = bookmarks[i];
-                var li = document.createElement('li');
-                li.setAttribute('title', 'Page ' + bookmark.page);
-                li.innerHTML = bookmark.title;
-                li.onclick = makeBookmarkClickHandler(bookmark.page, bookmark.zoom);
-                outer.appendChild(li);
-                if (typeof(bookmark.children) != 'undefined') {
-                    addBookmark(outer, bookmark.children);
-                }
-            }
-            container.appendChild(outer);
-        };
-
-        return Sidebar;
-    })();
-
-    var populateGoBtn = function (initialPage, pgCount) {
-        Button.go.className = "";
-        Button.go.innerHTML = "";
-        for (var i = 1; i <= pgCount; i++) {
-            var opt = document.createElement('option');
-            opt.value = i;
-            opt.innerHTML = pageLabels.length ? pageLabels[i - 1] : String(i);
-            Button.go.appendChild(opt);
-        }
-        Button.go.selectedIndex = initialPage - 1;
-    };
-
-    var handleGoBtn = function () {
-        IDRViewer.goToPage(parseInt(Button.go.options[Button.go.selectedIndex].value));
-        this.blur();
-    };
-
-    var updateSelectionButtons = function (mode) {
-        switch (mode) {
-            case IDRViewer.SELECT_PAN:
-                Button.select.className = 'btn';
-                Button.move.className = 'disabled btn';
-                break;
-            case IDRViewer.SELECT_SELECT:
-                Button.select.className = 'disabled btn';
-                Button.move.className = 'btn';
-                break;
-        }
-    };
-
-    var handlePageChange = function (data) {
-        d('pgCount').innerHTML = getPageString(data.page, data.pagecount);
-        Sidebar.handlePageChange(data.page);
-        Button.go.selectedIndex = data.page - 1;
-
-        Button.prev.className = data.isFirstPage ? 'disabled btn' : 'btn';
-        Button.next.className = data.isLastPage ? 'disabled btn' : 'btn';
-    };
-
-    var handleZoomUpdate = function (data) {
-        Button.zoom.value = data.zoomType;
-        Button.zoom.options[0].innerHTML = Math.floor(data.zoomValue * 100) + "%";
-
-        Button.zoomOut.className = data.isMinZoom ? 'disabled btn' : 'btn';
-        Button.zoomIn.className = data.isMaxZoom ? 'disabled btn' : 'btn';
-    };
-
-    var handleSelectionChange = function (data) {
-        updateSelectionButtons(data.type);
-    };
-
-    var handleZoomBtn = function () {
-        var zoomType = Button.zoom.value;
-        if (zoomType != IDRViewer.ZOOM_SPECIFIC) {
-            IDRViewer.setZoom(zoomType);
-        }
-        this.blur();
-    };
-
-    var handleViewBtn = function () {
-        IDRViewer.setLayout(Button.View.value);
-        this.blur();
-    };
-
-    var setupLayoutSwitching = function (pgCount, layout, availableLayouts, isMobile) {
-
-        if (!isMobile) {
-
-            if (availableLayouts.length > 1 && pgCount > 1) {
-                Button.View = document.createElement('select');
-                Button.View.id = 'viewBtn';
-
-                var temp = document.createElement('option');
-                temp.innerHTML = "Presentation";
-                temp.value = IDRViewer.LAYOUT_PRESENTATION;
-                Button.View.appendChild(temp);
-
-                if (availableLayouts.indexOf(IDRViewer.LAYOUT_MAGAZINE) != -1) {
-                    temp = document.createElement('option');
-                    temp.innerHTML = "Magazine";
-                    temp.value = IDRViewer.LAYOUT_MAGAZINE;
-                    Button.View.appendChild(temp);
-                }
-                if (availableLayouts.indexOf(IDRViewer.LAYOUT_CONTINUOUS) != -1) {
-                    temp = document.createElement('option');
-                    temp.innerHTML = "Continuous";
-                    temp.value = IDRViewer.LAYOUT_CONTINUOUS;
-                    Button.View.appendChild(temp);
-                }
-                Button.View.onchange = handleViewBtn;
-                d('controls-center').appendChild(Button.View);
-                Button.View.value = layout;
-            }
-
-        } else {
-            Button.zoom.parentNode.removeChild(Button.zoom);
-            Button.move.parentNode.removeChild(Button.move);
-            Button.select.parentNode.removeChild(Button.select);
-            Button.zoomIn.parentNode.removeChild(Button.zoomIn);
-            Button.zoomOut.parentNode.removeChild(Button.zoomOut);
-        }
-    };
-
-    var handleFullscreenChange = function (data) {
-        if (data.isFullscreen) {
-            Button.fullscreen.className = "btn open";
-        } else {
-            Button.fullscreen.className = "btn closed";
-        }
-    };
-
-    function getPageString(page, pageCount) {
-        var result = "/ " + pageCount;
-        if (pageLabels.length) {
-            result =  "(" + page + " / " + pageCount + ")";
-        }
-        return result;
-    }
-
-    var doSearch = function() {
-        var resultDiv = document.getElementById('searchResults');
-        resultDiv.innerHTML = "";
-
-        var searchTerm = d('searchInput').value;
-        var matchCase = d('cbMatchCase').checked;
-        var limitOnePerPage = d('cbLimitResults').checked;
-
-        var results = IDRViewer.search(searchTerm, matchCase, limitOnePerPage);
-
-        d('searchResultsCount').innerHTML = String(results.length) + " results";
-
-        var docFrag = document.createDocumentFragment();
-        for (var i = 0; i < results.length && i < 500; i++) {
-            var pg = results[i].page;
-
-            var link = document.createElement("a");
-            link.href = "?page=" + pg;
-            link.innerHTML = results[i].snippet;
-            link.className = "result";
-            (function(page) {
-                link.onclick = function() {
-                    IDRViewer.goToPage(page);
-                    return false;
-                };
-            })(pg);
-
-            docFrag.appendChild(link);
-
-        }
-        if (results.length >= 500) {
-            var element = document.createElement("span");
-            element.innerHTML = "Limited to first 500 results.";
-            element.className = "result";
-            docFrag.appendChild(element);
-        }
-        resultDiv.appendChild(docFrag);
-    };
-
-    /**
-     * Main setup function that runs on load
-     */
-    IDRViewer.on('ready', function (data) {
-
-        // Grab buttons
-        Button.go = d('goBtn');
-        Button.zoom = d('zoomBtn');
-        Button.fullscreen = d('btnFullScreen');
-        Button.prev = d('btnPrev');
-        Button.next = d('btnNext');
-        Button.move = d('btnMove');
-        Button.select = d('btnSelect');
-        Button.zoomIn = d('btnZoomIn');
-        Button.zoomOut = d('btnZoomOut');
-
-        Button.prev.className = data.isFirstPage ? 'disabled btn' : 'btn';
-        Button.next.className = data.isLastPage ? 'disabled btn' : 'btn';
-
-        // Set button actions
-        Button.go.onchange = handleGoBtn;
-        Button.zoom.onchange = handleZoomBtn;
-        Button.prev.onclick = function (e) { IDRViewer.prev(); e.preventDefault(); };
-        Button.next.onclick = function (e) { IDRViewer.next(); e.preventDefault(); };
-        Button.move.onclick = function (e) { IDRViewer.setSelectMode(IDRViewer.SELECT_PAN); e.preventDefault(); };
-        Button.select.onclick = function (e) { IDRViewer.setSelectMode(IDRViewer.SELECT_SELECT); e.preventDefault(); };
-        Button.zoomIn.onclick = function (e) { IDRViewer.zoomIn(); e.preventDefault(); };
-        Button.zoomOut.onclick = function (e) { IDRViewer.zoomOut(); e.preventDefault(); };
-
-        document.onkeydown = function(e) {
-            switch (e.keyCode) {
-                case 33: // Page Up
-                case 37: // Left Arrow
-                    IDRViewer.prev();
-                    e.preventDefault();
-                    break;
-                case 34: // Page Down
-                case 39: // Right Arrow
-                    IDRViewer.next();
-                    e.preventDefault();
-                    break;
-                case 36: // Home
-                    IDRViewer.goToPage(1);
-                    e.preventDefault();
-                    break;
-                case 35: // End
-                    IDRViewer.goToPage(data.pagecount);
-                    e.preventDefault();
-                    break;
-            }
-        };
-
-        // Misc setup
-        document.title = data.title ? data.title : data.fileName;
-        updateSelectionButtons(data.selectMode);
-        pageLabels = data.pageLabels;
-
-        populateGoBtn(data.page, data.pagecount);
-
-        Sidebar.setup(data.page, data.pagecount, data.bounds, data.thumbnailType, data.bookmarks);
-        d('pgCount').innerHTML = getPageString(data.page, data.pagecount);
-
-        if (IDRViewer.isFullscreenEnabled()) {
-            Button.fullscreen.onclick = function () {
-                IDRViewer.toggleFullScreen();
-            };
-            IDRViewer.on('fullscreenchange', handleFullscreenChange);
-        } else {
-            Button.fullscreen.parentNode.removeChild(Button.fullscreen);
-        }
-
-        setupLayoutSwitching(data.pagecount, data.layout, data.availableLayouts, data.isMobile);
-        Button.zoom.value = IDRViewer.ZOOM_AUTO;
-
-        // Add event listeners
-        IDRViewer.on('selectchange', handleSelectionChange);
-        IDRViewer.on('pagechange', handlePageChange);
-        IDRViewer.on('zoomchange', handleZoomUpdate);
-
-        var themeToggle = false;
-        d('btnThemeToggle').addEventListener('click', function() {
-            ClassHelper.removeClass(document.body, "light-theme");
-            ClassHelper.removeClass(document.body, "dark-theme");
-            ClassHelper.addClass(document.body, themeToggle ? "light-theme" : "dark-theme");
-            themeToggle = !themeToggle;
-        });
-
-        var searchInput = d('searchInput');
-        searchInput.value = "Loading";
-        searchInput.disabled = "disabled";
-        searchInput.oninput = doSearch;
-        d('cbMatchCase').onclick = doSearch;
-        d('cbLimitResults').onclick = doSearch;
-
-        document.addEventListener('keydown', function(event) {
-            if (event.keyCode == 70 && (event.ctrlKey || event.metaKey)) {
-                Sidebar.openSidebar();
-                Sidebar.switchToSearch();
-                event.preventDefault();
-            }
-        });
-
-        (function reticulateSplines() {
-            var el = document.createElement("div");
-            el.innerHTML = atob("PGRpdiBzdHlsZT0icG9zaXRpb246Zml4ZWQ7cmlnaHQ6MzBweDtib3R0b206MTVweDtib3JkZXItcmFkaXVz" +
-              "OjVweDtib3gtc2hhZG93OiAxcHggMXB4IDRweCByZ2JhKDEyMCwxMjAsMTIwLDAuNSk7bGluZS1oZWlnaHQ6MDtvdmVyZmxvdzpoaW" +
-              "RkZW47Ij48YSBocmVmPSJodHRwczovL3d3dy5pZHJzb2x1dGlvbnMuY29tL2J1aWxkdnUvIiByZWw9Im5vZm9sbG93IiB0YXJnZXQ9" +
-              "Il9ibGFuayI+PGltZyBhbHQ9IkNyZWF0ZWQgd2l0aCBCdWlsZFZ1IiBzdHlsZT0iYm9yZGVyOjA7IiBzcmM9ImRhdGE6aW1hZ2UvcG" +
-              "5nO2Jhc2U2NCxpVkJPUncwS0dnb0FBQUFOU1VoRVVnQUFBSllBQUFBdENBTUFBQUI3MG1KbUFBQUNQVkJNVkVYLy8vLysvdjBkSFJ2" +
-              "NysvdjgvUHlJaUlmYjI5di9iMG41d3k3MzkvZjR3aXY0d1NscWFtcng4ZkcwdExQNHZ5WGw1ZVhnNE9EQ3dzSjRlSGR1Ym0zVDA5UD" +
-              "R3Q2YzdmlQZTN0MnhzYkZnWUYvNHdpMzN2Qi9yNit1aG9hQ0VoSU9CZ1lCeGNYQlpXVmZvNk9oUlVWRkRRMElwS1NqajQrTm9hR2Ri" +
-              "VzFvbEpTUDN1Qlh6OC9QS3lzcGRYVjFKU1VjOFBEdjJ0USs2dXJxNHVMZGtaR1JVVkZQL2NFcjJ1aG42K3ZxcXFxcW1wcVpMUzBwQl" +
-              "FUODRPRGI1K2ZuMTlmWFgxOWZIeDhlK3ZyMmVucDZhbXBxWGw1ZU9qbzU4Zkh0MWRYVnpjM05XVmxaSFIwWGxueDM0dXh6Ky9mcnQ3" +
-              "ZTMrK2V2aTR1TFkyTmpRME5ERnhjV3VycTJVbEpSUFQwNGdJQi9uNStmT3pzN0J3Y0g4NTYraW9xS0tpb241MG12K256ejltVHMwTk" +
-              "RMNHdqSDR2aUhub3lIbm9CLzJ1aHZqblJqZ21CUCsvdnorOE16TXpNejk3Y1gvd0svODVxaWpvNk9Sa1pIL2JVcitxajMrcFQzOGp6" +
-              "VXRMU3p1cWgvMXNnais5K1RhMnRyLzI5TC8xc3ovekwvNzNJYUdob1g2Mm9INTBGMzV6RTcvYzA3K2wwSDV5RUQ5a1VEK2RrRC9zRH" +
-              "ozeER2OGtqbi93RGoxdVNULysvcisrdkgvOU9ycTZ1ci83T2YvNXQvKzg5Zjg2cjM4NDUveDBwai9wby80eTRML2tYVDUwV1AvZzJI" +
-              "NXlVVC9uMFQrYjBQL3REdit0emZ5cERMOGhUTDRzaTdycENJYkd4dnlyeGIvOXZQKzZ0ajk4dFAvMWNyNDU4bisyOFgrM2NQOTRxMy" +
-              "91cWYvdUtUKzE1di9ycGo3NEpYL25JTDlwNEQ1MVh6NjFXL3N3R3Y3cm1UK3RtUCtrMkg5cDFQbXFUdnpxQzZaVVdMMEFBQUdYVWxF" +
-              "UVZSWXcrMlloMTlTVVJUSHo3czg1WUdBVEJOSUJRRVZBeVFRVXlRMTl5cHpsWmxsYXBxMmQ3YjMzbnZ2dmZjZWYxdm52aWRGRmlPcl" +
-              "QzMCsrZnZvdS9kdzEvZWRjKzY5ZklCUmplcS9GQU0vcS9nNEVNRWYxbno0SjdFNnB3SXdJOGRpWWd3SU04eUtOdmJDemdYWTRSZThs" +
-              "YW53ZXpKeENvYmgvN0Vtck12Q1YzdFdLaTJEVkFVZW9DcjNSM0Q2Sm83cndMNGp4bHBxelRMWFZuNDNmK1BDVU11d05OUzdGWDVITT" +
-              "lZTU15RzhPamlPMnpSU2I3R2djSy9EMHNIS1U5U1pvUFNrQUJRN25RQ1Fwbld3WVBGWXFEdWJVM0piRUVPT2RRbEFBeXVCU3ExU1ZH" +
-              "VExkRnJDK3VNNDE4TnhXNmVHdGs5aFl2ZVd6Y2w3UU9Lck5hUjZDbVcyaGFETjlhV0Q0cWJiS3ZlaVBRbVdXYXRzMHhGWGJpc0Nsd2" +
-              "JhZlpiY1NXM2Q2ZTNLREUzV3hKSndYRk8zY2FnTDN5WVlFeXRXUzdxRUwyZGs2MENIaTgvV1VxdFd6ZFlXbzIyQlpUVmVxd2owTGtB" +
-              "djVzaWJNdXdnbTlXY0pkRmlpQXNNREdncmdRMnpTMTV6bk5GbzdGbnlsZWdNWll3TlM1OHJkQ3kxQTB6TE1NWFovVkJRWXk1c2pMZG" +
-              "lTbWVZTnJ2OHVXcUFzaG9BeUhlcHFzczFTaXRVVk1UTDBIdWFWQUN6Tit4Q0p4RkxhcFJ5VzRKNzkxVC8va1ZZeG9SVkVwRHo1YlE0" +
-              "VEtmcWZDWDZ5enlqTkFkbXpRYUlNNlBOMU1WanJZTE9iWkxGWmNhNVVrSG1VVlBNNlpodk5tWFlkUmIxY0ZLcE5FRnEzTHFXdCs4UE" +
-              "RGemYvNGh5UmNkaXdHeFhNVTFPTUhnQnZMWWpUQU5NTDhOc0FuTVplakJnZ1JUUVZrTjdZUXVncW02cXdMNWFCTlltdnd4RWpweEdp" +
-              "QThBS214eUdSRXJJVUc2Y3hHYWh6NE9ES3paZitVcFFFeFlZSExKWEV1aDJrSTNmcnFoSE5RK1U1eVptZW5US3FFODNWQUJTb05Nby" +
-              "tWZDZ0K01ma3VGaGtwSGsxV1duRm5wQU9leUNDZndPYzZJVkVsSkNVbFNUTEEzOWYwRGZWY3U3emt6SlRvV3o2WFVLVEdmaFdvSnJt" +
-              "OVJnVHdmVkNWRnVCR296ZW9hdnZTbDQxZ0o5dEZKV0d3dnlvOXdKejRYc0JJVEU1T1NOcDJxcjYvdjc3OStlYytLZDRlQm50c1JzTD" +
-              "dmdVZHMk14T3RRMmpiQXNTaVZHTlFpUWQ2Ni92cSt6L3RXYkZ5em9jN2YrK3FSazNaeXcxaHpSMDdkdTZCTlgxOTlUZFdJRmJYam9l" +
-              "d2VNTmZ3NEpPQVl0U1RaNDNlY0thdnQ3ZWxTdm56T2xhdGVybDh1M3JnWW1LeGJBUjRqR3lucWlUUVN5a21qQmgzTGhidmIxWEw4N3" +
-              "AycmZxMmlXeE9HL0RuL0FXRTBPQzNlV01OT1hIVUdjaDFmanh0MjVjdmJpamE5KzFTM2xpc1hqN3ZVaFg5YlJBbmRzZE1IalF5S3kx" +
-              "NmVnOVpMQ3BBU1JWYmdVdTJWN25VdzVsZXBtdExoREkwVFJqblFGOWhjQlRVSTZQNU0yODRkQU9QN21NMGlFc1NvVWFYTk8xWTllcT" +
-              "NjdkZxRHp4UnB6cHgxajVvQ1ZrOVdwQ3lGTDhtQkRrQVZVR2FVV3NRbEtPbzBvSlNlWUhzMUJGU0hZYjlweE5aMnZLS1FLVUtGZVB6" +
-              "Mlk3ZnpNMnVPRmJiYUZZWXhCTGNOYmc0T0RldDd2MkJhbkVRYTd2c0xEUUVKZEUzbVFsMC9HbE04Z2tpaldSNkJFcm5hVGlJRFhKVm" +
-              "cxaHBSR1hNcjdVVEVnWm9HUUtRT25TK1djV2p5WFBHWWExaE9POUZZemhnVmNuNE1FdXBCS3dVSXVSS3h5V2pGNkpwQzRHTEJva0hE" +
-              "RHhDSTJlZHVncXpRK1BkWHluVVFnaUpueFA1eUo2dmg5K0w4N0x5K094cUI0alZ4Z3NlNHBGN1c2YkZRT1dqRTVpSWNSSkU5R2dRc3" +
-              "VIRVE2UHhXemxwSWcxZC9MZXpvN2duWE5zdzhiRlQ1NmRQdjNpN05uejU3ZFRmNFhCNHFXRjJMQ3dZVFh4MHJJR1g2UWxGeUlFY1Fw" +
-              "c3dTZ21KblIyclAzQmpqMTQrK2pSWSt2WEh3eUg1YTZjcmMwbWFSUkw4RU1Vckd5aXBxWGV6RUoxUVNTcytYQ0M2em5YY1NqeU1SSU" +
-              "9pNzZ4aDVCbWlxV0dJbWpzSnQ1UXJHUVFNUXlQaGFzejRDVnQ4ZnhRWDNLeElWUEFzdlB6eVF1SG4yMVRsNnlGYUlxVThpMkV6SVFV" +
-              "RzZtbXlVemFra094TEVKUHhESmo2ZXdtTXNFMnRlcXJnRmRqSVQrZHNpN01tVHNDckJveU1jMms2U1lCQjBBbDVsaVpLWVBZYWF4OH" +
-              "BBem5uVWxJYmE3Qkpac0JZQ0xkTlZvN0lXNTZ2dUpmaVYzVENvS3lwZ0hLcElIaFhQT1pFV0pWRTE3dWRseW9PSXV2MXpWU3JGcVN5" +
-              "bU1KV2dmb0xhbzJXVXJRQzRWV09RaEt0bFo1RldhREE2SXJ4bStudWxhRlFxOVlLQmhRYWpKWDZWbHFzSk5hVlZpa0tIaDVjTVVTUF" +
-              "ZaS0crQ0xkTTRnSUJUN1RTWjAzYTlqeFJKK0p2UkdaaUwvTUlINmpWakFzRlJNMEJMbGk5alFyekRNMTNhK2huUS9KR1ZGb21HTS8r" +
-              "WVBTU1BRdXJSL0VrdFpBQ3lNYWxTaitqMzZESlBYRlVmWVU0NDFBQUFBQUVsRlRrU3VRbUNDIiAvPjwvYT48L2Rpdj4=");
-            document.body[atob("YXBwZW5kQ2hpbGQ=")](el.firstChild);
-        })();
-    });
-})();
-</script>
-<style type="text/css">
-    #left {
-        transition-timing-function: ease;
-        transition-duration: 200ms;
-        top: 45px;
-        bottom: 0;
-        position: absolute;
-        overflow: hidden;
-        z-index: 999;
-        left: -350px;
-        width: 350px;
-    }
-    .light-theme #left {
-        border-right: 1px solid #7b8793;
-    }
-    .dark-theme #left {
-        border-right: 1px solid #000;
-    }
-    #left.open {
-        left: 0;
-    }
-    #left-controls {
-        height: 44px;
-        display: block;
-    }
-    #leftContent {
-        top: 45px;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        position: absolute;
-        overflow-y: scroll;
-        background-color: #eee;
-        -webkit-overflow-scrolling: touch;
-    }
-    #btnOutlines {
-        display: none;
-    }
-    #left.hasBookmarks #btnOutlines {
-        display: inline;
-    }
-    #outlinePanel {
-        display: none;
-    }
-
-    #pgCount {
-        font-family: Arial,serif;
-        vertical-align: middle;
-        font-size: 15px;
-    }
-    #btnSelect, #btnZoomOut, #viewBtn {
-        margin-left: 20px;
-    }
-
-
-    #goBtn, #zoomBtn, #viewBtn {
-        height: 25px;
-    }
-    #goBtn {
-        width: 55px;
-    }
-    #viewBtn {
-        width: 105px;
-    }
-    #zoomBtn {
-        width: 95px;
-    }
-    .thumbnail {
-        cursor: pointer;
-        display: block;
-        padding: 8px 0;
-        margin: 0 auto;
-        text-align: center;
-    }
-    .thumbnail img{
-        max-width: 160px;
-        border-radius: 5px;
-        border: 1px solid #bbb;
-    }
-    .currentPageThumbnail, .thumbnail:hover {
-        background-color: #ddd;
-    }
-    .currentPageThumbnail img, .thumbnail:hover img {
-        border: 1px solid #999;
-    }
-
-    #thumbnailPanel.visible, #outlinePanel.visible, #searchPanel.visible {
-        display: inline;
-    }
-    #thumbnailPanel.hidden, #outlinePanel.hidden, #searchPanel.hidden {
-        display: none;
-    }
-    #outlinePanel ul {
-        list-style-type: none;
-        padding: 0 5px;
-    }
-    #outlinePanel ul ul {
-        padding-left: 15px;
-        padding-right: 0;
-    }
-    #outlinePanel li {
-        color: #333;
-        padding: 2px;
-        font-family: Arial,serif;
-        font-size: 15px;
-    }
-    #outlinePanel li:hover {
-        background-color: #ddd;
-        cursor: pointer;
-    }
-    #searchPanel {
-        font-family: Arial, sans-serif;
-        font-size: 14px;
-    }
-    #searchPanel * {
-        color: #333;
-        margin: 5px;
-    }
-    #searchPanel #searchInput {
-        color: black;
-        border: 1px solid #666;
-        width: 288px;
-        display: block;
-        padding: 5px;
-        margin: 20px auto 10px;
-    }
-    #searchPanel .searchOption {
-        margin: 0 20px;
-        display: block;
-    }
-    #searchPanel hr {
-        margin-top: 18px;
-    }
-    #searchPanel #searchResultsCount {
-        text-align: center;
-        display: block;
-    }
-    #searchPanel .result {
-        text-decoration: none;
-        display: block;
-        word-wrap: break-word;
-    }
-    #searchPanel .result:hover {
-        background-color: #ddd;
-    }
-
-    body {
-        margin: 0;
-        padding: 0;
-    }
-
-    .btn {
-        border: 0 none;
-        height: 30px;
-        padding: 0;
-        width: 30px;
-        background-color: transparent;
-        display: inline-block;
-        margin: 7px 5px 0;
-        vertical-align: top;
-        cursor: pointer;
-    }
-
-    .page {
-        box-shadow: 1px 1px 4px rgba(120, 120, 120, 0.5);
-    }
-
-    #controls {
-        height: 44px;
-        position: fixed;
-        text-align: center;
-        top: 0;
-        left: 0;
-        right: 0;
-        transition: 0.3s ease 0s;
-    }
-    
-    #controls select {
-        margin-top: 10px;
-    }
-    
-    #controls-left {
-        display: inline-block;
-        left: 0;
-        position: absolute;
-    }
-    #controls-center {
-        display: inline-block;
-    }
-    #controls-right {
-        display: inline-block;
-        right: 0;
-        position: absolute;
-    }
-
-    .light-theme #idrviewer {
-        background: #fafafa none repeat scroll 0 0;
-    }
-    .light-theme #controls,
-    .light-theme #left-controls {
-        background: #9eacba none repeat scroll 0 0;
-        border-bottom: 1px solid #7b8793;
-    }
-
-    .light-theme #pgCount,
-    .light-theme .btn {
-        color: white;
-        text-shadow: 0 0 1px #595959;
-    }
-    .light-theme .btn:hover {
-        opacity: 0.6;
-    }
-    .light-theme .btn.disabled {
-        opacity: 0.4;
-    }
-
-    .light-theme #goBtn,
-    .light-theme #zoomBtn,
-    .light-theme #viewBtn {
-        background-color: #9aa8b6;
-        color: white;
-        border: 1px solid #7b8793;
-    }
-
-    .dark-theme #idrviewer {
-        background: #666 none repeat scroll 0 0;
-    }
-    .dark-theme #controls,
-    .dark-theme #left-controls {
-        background: #444 none repeat scroll 0 0;
-        border-bottom: 1px solid #000;
-    }
-    .dark-theme #pgCount {
-        color: white;
-        opacity: 0.8;
-    }
-    .dark-theme .btn {
-        opacity: 0.7;
-        color: white;
-    }
-    .dark-theme .btn:hover {
-        opacity: 0.95;
-    }
-    .dark-theme .btn.disabled {
-        opacity: 0.2;
-    }
-
-    .dark-theme #goBtn,
-    .dark-theme #zoomBtn,
-    .dark-theme #viewBtn {
-        background-color: #656565;
-        color: white;
-        border: 1px solid #000;
-    }
-
-    #idrviewer {
-        top: 45px;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        position: absolute;
-    }
-
-    .spinner {
-        border: 6px solid #bbb;
-        border-top: 6px solid #3c9fe1;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        margin: 0 auto;
-    }
-
-    .spinning {
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
+</head>
+
+<body style="margin: 0;">
+
+<div id="p1" style="overflow: hidden; position: relative; background-color: white; width: 909px; height: 6149px;">
+
+<!-- Begin shared CSS values -->
+<style class="shared-css" type="text/css" >
+.t {
+	-webkit-transform-origin: bottom left;
+	-ms-transform-origin: bottom left;
+	transform-origin: bottom left;
+	-webkit-transform: scale(0.25);
+	-ms-transform: scale(0.25);
+	transform: scale(0.25);
+	z-index: 2;
+	position: absolute;
+	white-space: pre;
+	overflow: visible;
+}
+</style>
+<!-- End shared CSS values -->
+
+
+<!-- Begin inline CSS -->
+<style type="text/css" >
+
+#t1_1{left:140px;bottom:5980px;letter-spacing:-0.2px;word-spacing:-0.7px;}
+#t2_1{left:207px;bottom:5936px;letter-spacing:-0.2px;word-spacing:-0.5px;}
+#t3_1{left:11px;bottom:5621px;}
+#t4_1{left:45px;bottom:5621px;letter-spacing:-0.5px;word-spacing:0.9px;}
+#t5_1{left:96px;bottom:5586px;letter-spacing:0.3px;}
+#t6_1{left:300px;bottom:5586px;letter-spacing:-0.2px;}
+#t7_1{left:523px;bottom:5586px;letter-spacing:-1px;}
+#t8_1{left:712px;bottom:5586px;letter-spacing:-0.2px;}
+#t9_1{left:103px;bottom:5541px;letter-spacing:-0.2px;}
+#ta_1{left:266px;bottom:5541px;letter-spacing:-0.6px;word-spacing:-0.6px;}
+#tb_1{left:548px;bottom:5541px;letter-spacing:-0.7px;}
+#tc_1{left:770px;bottom:5541px;letter-spacing:-0.2px;}
+#td_1{left:106px;bottom:5496px;letter-spacing:0.1px;}
+#te_1{left:277px;bottom:5496px;letter-spacing:-0.1px;}
+#tf_1{left:535px;bottom:5496px;}
+#tg_1{left:750px;bottom:5496px;letter-spacing:0.1px;}
+#th_1{left:93px;bottom:5439px;letter-spacing:-0.2px;}
+#ti_1{left:249px;bottom:5439px;letter-spacing:-0.1px;}
+#tj_1{left:546px;bottom:5439px;letter-spacing:0.1px;}
+#tk_1{left:683px;bottom:5439px;letter-spacing:-0.2px;}
+#tl_1{left:98px;bottom:5381px;letter-spacing:-0.1px;}
+#tm_1{left:272px;bottom:5381px;letter-spacing:-0.2px;}
+#tn_1{left:534px;bottom:5381px;letter-spacing:-2.1px;}
+#to_1{left:743px;bottom:5381px;}
+#tp_1{left:11px;bottom:5344px;}
+#tq_1{left:45px;bottom:5344px;letter-spacing:-0.5px;}
+#tr_1{left:66px;bottom:5318px;word-spacing:-0.5px;}
+#ts_1{left:165px;bottom:5318px;}
+#tt_1{left:180px;bottom:5318px;word-spacing:-1.1px;}
+#tu_1{left:121px;bottom:5292px;letter-spacing:0.1px;}
+#tv_1{left:200px;bottom:5292px;letter-spacing:-0.3px;word-spacing:1.6px;}
+#tw_1{left:121px;bottom:5266px;letter-spacing:-0.2px;word-spacing:1px;}
+#tx_1{left:66px;bottom:5241px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#ty_1{left:165px;bottom:5241px;}
+#tz_1{left:180px;bottom:5241px;word-spacing:-1.1px;}
+#t10_1{left:121px;bottom:5215px;letter-spacing:-0.1px;word-spacing:-0.5px;}
+#t11_1{left:497px;bottom:5215px;letter-spacing:-0.4px;word-spacing:2.7px;}
+#t12_1{left:121px;bottom:5189px;letter-spacing:-0.3px;word-spacing:0.5px;}
+#t13_1{left:66px;bottom:5163px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#t14_1{left:165px;bottom:5163px;}
+#t15_1{left:180px;bottom:5163px;word-spacing:-1.1px;}
+#t16_1{left:121px;bottom:5138px;word-spacing:-0.5px;}
+#t17_1{left:301px;bottom:5138px;letter-spacing:-0.2px;word-spacing:1.8px;}
+#t18_1{left:121px;bottom:5112px;letter-spacing:-0.3px;word-spacing:1.3px;}
+#t19_1{left:121px;bottom:5086px;letter-spacing:-0.3px;word-spacing:0.1px;}
+#t1a_1{left:121px;bottom:5060px;letter-spacing:-0.2px;word-spacing:1px;}
+#t1b_1{left:11px;bottom:5028px;}
+#t1c_1{left:45px;bottom:5028px;letter-spacing:-0.6px;}
+#t1d_1{left:66px;bottom:5002px;letter-spacing:-0.2px;}
+#t1e_1{left:66px;bottom:4976px;}
+#t1f_1{left:77px;bottom:4984px;letter-spacing:0.2px;}
+#t1g_1{left:97px;bottom:4976px;word-spacing:-1.5px;}
+#t1h_1{left:121px;bottom:4950px;letter-spacing:-0.2px;word-spacing:1.1px;}
+#t1i_1{left:121px;bottom:4924px;letter-spacing:-0.2px;word-spacing:-0.1px;}
+#t1j_1{left:121px;bottom:4899px;letter-spacing:-0.2px;}
+#t1k_1{left:66px;bottom:4873px;letter-spacing:-0.2px;}
+#t1l_1{left:66px;bottom:4847px;}
+#t1m_1{left:77px;bottom:4855px;letter-spacing:-0.8px;}
+#t1n_1{left:92px;bottom:4847px;letter-spacing:-0.1px;word-spacing:-0.9px;}
+#t1o_1{left:121px;bottom:4821px;letter-spacing:-0.2px;word-spacing:0.6px;}
+#t1p_1{left:121px;bottom:4796px;letter-spacing:-0.2px;word-spacing:1.1px;}
+#t1q_1{left:219px;bottom:4796px;letter-spacing:-0.4px;}
+#t1r_1{left:121px;bottom:4770px;letter-spacing:-0.3px;word-spacing:0.8px;}
+#t1s_1{left:66px;bottom:4744px;letter-spacing:-0.1px;word-spacing:-0.2px;}
+#t1t_1{left:66px;bottom:4718px;letter-spacing:-0.3px;}
+#t1u_1{left:186px;bottom:4718px;letter-spacing:-0.3px;word-spacing:1.9px;}
+#t1v_1{left:11px;bottom:4686px;}
+#t1w_1{left:45px;bottom:4686px;letter-spacing:-0.3px;word-spacing:0.3px;}
+#t1x_1{left:66px;bottom:4660px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#t1y_1{left:157px;bottom:4660px;}
+#t1z_1{left:173px;bottom:4660px;}
+#t20_1{left:121px;bottom:4634px;letter-spacing:-0.1px;word-spacing:-0.9px;}
+#t21_1{left:121px;bottom:4608px;letter-spacing:-0.2px;}
+#t22_1{left:121px;bottom:4582px;letter-spacing:-0.3px;word-spacing:0.8px;}
+#t23_1{left:121px;bottom:4556px;letter-spacing:-0.2px;word-spacing:0.8px;}
+#t24_1{left:282px;bottom:4556px;letter-spacing:-0.2px;word-spacing:1.3px;}
+#t25_1{left:357px;bottom:4556px;}
+#t26_1{left:375px;bottom:4556px;word-spacing:0.5px;}
+#t27_1{left:460px;bottom:4556px;}
+#t28_1{left:478px;bottom:4556px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t29_1{left:529px;bottom:4556px;}
+#t2a_1{left:547px;bottom:4556px;letter-spacing:-0.3px;}
+#t2b_1{left:611px;bottom:4556px;}
+#t2c_1{left:629px;bottom:4556px;letter-spacing:-0.3px;}
+#t2d_1{left:728px;bottom:4556px;}
+#t2e_1{left:746px;bottom:4556px;letter-spacing:0.1px;word-spacing:-0.6px;}
+#t2f_1{left:66px;bottom:4531px;}
+#t2g_1{left:66px;bottom:4499px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#t2h_1{left:157px;bottom:4499px;}
+#t2i_1{left:173px;bottom:4499px;letter-spacing:-0.1px;word-spacing:-0.2px;}
+#t2j_1{left:121px;bottom:4466px;word-spacing:-1px;}
+#t2k_1{left:121px;bottom:4439px;letter-spacing:-0.3px;}
+#t2l_1{left:121px;bottom:4413px;letter-spacing:-0.2px;word-spacing:1.1px;}
+#t2m_1{left:121px;bottom:4387px;letter-spacing:-0.2px;word-spacing:1px;}
+#t2n_1{left:121px;bottom:4362px;letter-spacing:-0.3px;word-spacing:0.6px;}
+#t2o_1{left:66px;bottom:4330px;letter-spacing:-0.2px;}
+#t2p_1{left:114px;bottom:4330px;}
+#t2q_1{left:130px;bottom:4330px;letter-spacing:-0.2px;}
+#t2r_1{left:121px;bottom:4297px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#t2s_1{left:121px;bottom:4270px;letter-spacing:-0.3px;word-spacing:1.2px;}
+#t2t_1{left:121px;bottom:4244px;letter-spacing:-0.4px;word-spacing:0.9px;}
+#t2u_1{left:121px;bottom:4218px;letter-spacing:-0.3px;word-spacing:0.3px;}
+#t2v_1{left:66px;bottom:4193px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t2w_1{left:11px;bottom:4160px;}
+#t2x_1{left:45px;bottom:4160px;letter-spacing:-0.3px;}
+#t2y_1{left:66px;bottom:4134px;letter-spacing:-0.6px;}
+#t2z_1{left:141px;bottom:4134px;letter-spacing:-0.1px;word-spacing:-0.7px;}
+#t30_1{left:121px;bottom:4108px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t31_1{left:121px;bottom:4082px;letter-spacing:0.1px;word-spacing:-0.5px;}
+#t32_1{left:181px;bottom:4082px;}
+#t33_1{left:274px;bottom:4082px;letter-spacing:-0.3px;word-spacing:0.7px;}
+#t34_1{left:787px;bottom:4082px;letter-spacing:-0.8px;}
+#t35_1{left:121px;bottom:4057px;letter-spacing:0.1px;word-spacing:-0.5px;}
+#t36_1{left:181px;bottom:4057px;letter-spacing:-0.4px;}
+#t37_1{left:246px;bottom:4057px;letter-spacing:-0.3px;}
+#t38_1{left:66px;bottom:4031px;}
+#t39_1{left:121px;bottom:4005px;letter-spacing:-0.1px;}
+#t3a_1{left:158px;bottom:4005px;}
+#t3b_1{left:177px;bottom:4005px;letter-spacing:-0.1px;word-spacing:0.7px;}
+#t3c_1{left:553px;bottom:4005px;word-spacing:1.1px;}
+#t3d_1{left:121px;bottom:3979px;letter-spacing:-0.3px;word-spacing:-0.2px;}
+#t3e_1{left:176px;bottom:3954px;letter-spacing:-0.1px;}
+#t3f_1{left:176px;bottom:3928px;}
+#t3g_1{left:231px;bottom:3902px;letter-spacing:-0.2px;word-spacing:1.3px;}
+#t3h_1{left:659px;bottom:3902px;word-spacing:1.1px;}
+#t3i_1{left:231px;bottom:3876px;word-spacing:-0.5px;}
+#t3j_1{left:176px;bottom:3851px;letter-spacing:-0.3px;}
+#t3k_1{left:66px;bottom:3825px;letter-spacing:-0.1px;word-spacing:-0.8px;}
+#t3l_1{left:399px;bottom:3825px;}
+#t3m_1{left:121px;bottom:3799px;letter-spacing:-0.2px;word-spacing:0.1px;}
+#t3n_1{left:121px;bottom:3773px;letter-spacing:-0.4px;word-spacing:0.5px;}
+#t3o_1{left:121px;bottom:3747px;letter-spacing:-0.3px;word-spacing:0.8px;}
+#t3p_1{left:478px;bottom:3747px;letter-spacing:-0.4px;}
+#t3q_1{left:540px;bottom:3747px;letter-spacing:-0.2px;word-spacing:1.2px;}
+#t3r_1{left:659px;bottom:3747px;letter-spacing:-0.1px;}
+#t3s_1{left:685px;bottom:3747px;word-spacing:0.2px;}
+#t3t_1{left:121px;bottom:3722px;letter-spacing:-0.1px;}
+#t3u_1{left:248px;bottom:3722px;letter-spacing:-0.5px;word-spacing:1.5px;}
+#t3v_1{left:363px;bottom:3722px;letter-spacing:-1px;}
+#t3w_1{left:121px;bottom:3696px;letter-spacing:-0.3px;word-spacing:0.6px;}
+#t3x_1{left:401px;bottom:3696px;letter-spacing:-0.1px;}
+#t3y_1{left:428px;bottom:3696px;letter-spacing:-0.1px;}
+#t3z_1{left:121px;bottom:3670px;letter-spacing:-0.1px;word-spacing:0.3px;}
+#t40_1{left:570px;bottom:3670px;letter-spacing:-0.1px;}
+#t41_1{left:703px;bottom:3670px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t42_1{left:66px;bottom:3644px;letter-spacing:-0.6px;}
+#t43_1{left:141px;bottom:3644px;letter-spacing:-0.1px;word-spacing:-0.7px;}
+#t44_1{left:121px;bottom:3619px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t45_1{left:121px;bottom:3593px;letter-spacing:0.1px;word-spacing:-0.5px;}
+#t46_1{left:181px;bottom:3593px;}
+#t47_1{left:274px;bottom:3593px;letter-spacing:-0.3px;word-spacing:0.7px;}
+#t48_1{left:787px;bottom:3593px;letter-spacing:-0.8px;}
+#t49_1{left:121px;bottom:3567px;letter-spacing:0.1px;word-spacing:-0.5px;}
+#t4a_1{left:181px;bottom:3567px;letter-spacing:-0.4px;}
+#t4b_1{left:246px;bottom:3567px;letter-spacing:-0.3px;}
+#t4c_1{left:66px;bottom:3541px;letter-spacing:-0.1px;word-spacing:-0.8px;}
+#t4d_1{left:121px;bottom:3516px;letter-spacing:-0.1px;word-spacing:0.4px;}
+#t4e_1{left:121px;bottom:3490px;letter-spacing:-0.3px;word-spacing:1.1px;}
+#t4f_1{left:121px;bottom:3464px;letter-spacing:-0.3px;word-spacing:0.9px;}
+#t4g_1{left:121px;bottom:3438px;letter-spacing:-0.3px;word-spacing:2.4px;}
+#t4h_1{left:176px;bottom:3413px;}
+#t4i_1{left:181px;bottom:3413px;letter-spacing:-0.3px;}
+#t4j_1{left:259px;bottom:3413px;letter-spacing:-0.1px;word-spacing:0.3px;}
+#t4k_1{left:501px;bottom:3413px;}
+#t4l_1{left:176px;bottom:3387px;letter-spacing:-0.1px;word-spacing:-0.3px;}
+#t4m_1{left:330px;bottom:3387px;letter-spacing:-0.1px;}
+#t4n_1{left:409px;bottom:3387px;}
+#t4o_1{left:416px;bottom:3387px;}
+#t4p_1{left:462px;bottom:3387px;word-spacing:2.5px;}
+#t4q_1{left:176px;bottom:3361px;letter-spacing:-0.3px;word-spacing:0.7px;}
+#t4r_1{left:176px;bottom:3335px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t4s_1{left:420px;bottom:3335px;}
+#t4t_1{left:463px;bottom:3335px;letter-spacing:-0.4px;}
+#t4u_1{left:176px;bottom:3309px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t4v_1{left:176px;bottom:3284px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#t4w_1{left:66px;bottom:3258px;letter-spacing:0.1px;word-spacing:-1.3px;}
+#t4x_1{left:204px;bottom:3258px;letter-spacing:0.3px;}
+#t4y_1{left:121px;bottom:3232px;letter-spacing:-0.2px;word-spacing:2.6px;}
+#t4z_1{left:289px;bottom:3232px;}
+#t50_1{left:411px;bottom:3232px;letter-spacing:-0.2px;word-spacing:-0.2px;}
+#t51_1{left:121px;bottom:3206px;letter-spacing:-0.2px;word-spacing:0.6px;}
+#t52_1{left:356px;bottom:3206px;}
+#t53_1{left:66px;bottom:3181px;letter-spacing:-0.2px;word-spacing:-0.9px;}
+#t54_1{left:121px;bottom:3155px;letter-spacing:-0.2px;word-spacing:0.6px;}
+#t55_1{left:121px;bottom:3129px;}
+#t56_1{left:132px;bottom:3129px;letter-spacing:-0.3px;word-spacing:1.3px;}
+#t57_1{left:287px;bottom:3129px;letter-spacing:-0.2px;}
+#t58_1{left:366px;bottom:3129px;letter-spacing:-0.3px;word-spacing:0.5px;}
+#t59_1{left:621px;bottom:3129px;}
+#t5a_1{left:121px;bottom:3103px;letter-spacing:-0.2px;word-spacing:0.3px;}
+#t5b_1{left:617px;bottom:3103px;letter-spacing:-0.2px;word-spacing:1.8px;}
+#t5c_1{left:66px;bottom:3078px;letter-spacing:-0.2px;word-spacing:-0.8px;}
+#t5d_1{left:121px;bottom:3052px;letter-spacing:-0.3px;word-spacing:1px;}
+#t5e_1{left:486px;bottom:3052px;letter-spacing:-0.2px;}
+#t5f_1{left:522px;bottom:3052px;letter-spacing:-0.4px;}
+#t5g_1{left:628px;bottom:3052px;}
+#t5h_1{left:709px;bottom:3052px;}
+#t5i_1{left:716px;bottom:3052px;}
+#t5j_1{left:800px;bottom:3052px;}
+#t5k_1{left:66px;bottom:3026px;letter-spacing:-0.1px;word-spacing:-0.8px;}
+#t5l_1{left:121px;bottom:3000px;letter-spacing:-0.2px;word-spacing:1.1px;}
+#t5m_1{left:121px;bottom:2975px;letter-spacing:-0.3px;word-spacing:0.8px;}
+#t5n_1{left:121px;bottom:2949px;letter-spacing:-0.1px;word-spacing:0.2px;}
+#t5o_1{left:121px;bottom:2923px;letter-spacing:-0.2px;word-spacing:0.8px;}
+#t5p_1{left:604px;bottom:2923px;}
+#t5q_1{left:620px;bottom:2923px;letter-spacing:-0.2px;}
+#t5r_1{left:121px;bottom:2897px;letter-spacing:-0.3px;word-spacing:2.7px;}
+#t5s_1{left:310px;bottom:2897px;letter-spacing:-0.2px;}
+#t5t_1{left:388px;bottom:2897px;letter-spacing:-0.3px;word-spacing:0.5px;}
+#t5u_1{left:121px;bottom:2872px;letter-spacing:-0.3px;word-spacing:0.6px;}
+#t5v_1{left:121px;bottom:2846px;}
+#t5w_1{left:164px;bottom:2846px;letter-spacing:-0.1px;}
+#t5x_1{left:233px;bottom:2846px;letter-spacing:-0.2px;}
+#t5y_1{left:271px;bottom:2846px;letter-spacing:-0.4px;}
+#t5z_1{left:327px;bottom:2846px;}
+#t60_1{left:66px;bottom:2820px;letter-spacing:-0.1px;word-spacing:-0.3px;}
+#t61_1{left:411px;bottom:2820px;letter-spacing:0.3px;}
+#t62_1{left:121px;bottom:2794px;letter-spacing:-0.5px;word-spacing:0.5px;}
+#t63_1{left:121px;bottom:2769px;letter-spacing:-0.6px;word-spacing:0.7px;}
+#t64_1{left:121px;bottom:2743px;letter-spacing:-0.2px;word-spacing:0.9px;}
+#t65_1{left:121px;bottom:2717px;letter-spacing:-0.6px;word-spacing:1.3px;}
+#t66_1{left:284px;bottom:2717px;letter-spacing:-0.2px;word-spacing:0.9px;}
+#t67_1{left:375px;bottom:2717px;}
+#t68_1{left:393px;bottom:2717px;word-spacing:1.2px;}
+#t69_1{left:479px;bottom:2717px;}
+#t6a_1{left:497px;bottom:2717px;letter-spacing:0.1px;}
+#t6b_1{left:558px;bottom:2717px;}
+#t6c_1{left:576px;bottom:2717px;}
+#t6d_1{left:625px;bottom:2717px;}
+#t6e_1{left:648px;bottom:2717px;letter-spacing:-0.1px;}
+#t6f_1{left:708px;bottom:2717px;}
+#t6g_1{left:731px;bottom:2717px;letter-spacing:-0.1px;}
+#t6h_1{left:786px;bottom:2717px;}
+#t6i_1{left:808px;bottom:2717px;letter-spacing:0.2px;}
+#t6j_1{left:121px;bottom:2691px;word-spacing:0.3px;}
+#t6k_1{left:66px;bottom:2666px;letter-spacing:-0.1px;word-spacing:-0.3px;}
+#t6l_1{left:431px;bottom:2666px;letter-spacing:0.1px;}
+#t6m_1{left:121px;bottom:2640px;letter-spacing:-0.2px;word-spacing:0.2px;}
+#t6n_1{left:484px;bottom:2640px;letter-spacing:-0.1px;}
+#t6o_1{left:534px;bottom:2640px;}
+#t6p_1{left:121px;bottom:2614px;letter-spacing:-0.2px;word-spacing:1.2px;}
+#t6q_1{left:121px;bottom:2588px;letter-spacing:-0.1px;word-spacing:0.5px;}
+#t6r_1{left:121px;bottom:2563px;letter-spacing:-0.1px;word-spacing:0.3px;}
+#t6s_1{left:121px;bottom:2537px;letter-spacing:-0.2px;word-spacing:0.1px;}
+#t6t_1{left:66px;bottom:2511px;word-spacing:-0.3px;}
+#t6u_1{left:121px;bottom:2485px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#t6v_1{left:121px;bottom:2460px;letter-spacing:-0.3px;word-spacing:0.1px;}
+#t6w_1{left:121px;bottom:2434px;letter-spacing:-0.2px;word-spacing:0.2px;}
+#t6x_1{left:11px;bottom:2401px;}
+#t6y_1{left:45px;bottom:2401px;letter-spacing:-0.2px;}
+#t6z_1{left:66px;bottom:2350px;word-spacing:-1.6px;}
+#t70_1{left:231px;bottom:2350px;}
+#t71_1{left:121px;bottom:2324px;letter-spacing:-0.2px;word-spacing:0.2px;}
+#t72_1{left:121px;bottom:2298px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#t73_1{left:121px;bottom:2272px;letter-spacing:-0.2px;word-spacing:-0.5px;}
+#t74_1{left:121px;bottom:2247px;letter-spacing:-0.2px;word-spacing:-0.2px;}
+#t75_1{left:121px;bottom:2221px;letter-spacing:-0.2px;word-spacing:0.5px;}
+#t76_1{left:121px;bottom:2195px;letter-spacing:-0.1px;word-spacing:-0.6px;}
+#t77_1{left:176px;bottom:2170px;letter-spacing:-0.2px;word-spacing:0.2px;}
+#t78_1{left:176px;bottom:2144px;letter-spacing:-0.4px;word-spacing:0.6px;}
+#t79_1{left:176px;bottom:2118px;word-spacing:-0.4px;}
+#t7a_1{left:66px;bottom:2093px;word-spacing:-2px;}
+#t7b_1{left:231px;bottom:2093px;}
+#t7c_1{left:121px;bottom:2067px;letter-spacing:-0.7px;word-spacing:0.2px;}
+#t7d_1{left:121px;bottom:2041px;letter-spacing:-0.5px;word-spacing:0.4px;}
+#t7e_1{left:121px;bottom:2016px;letter-spacing:-0.1px;word-spacing:-0.3px;}
+#t7f_1{left:121px;bottom:1990px;letter-spacing:-0.6px;word-spacing:0.6px;}
+#t7g_1{left:121px;bottom:1964px;letter-spacing:-0.2px;word-spacing:-0.1px;}
+#t7h_1{left:121px;bottom:1939px;letter-spacing:-1.5px;}
+#t7i_1{left:66px;bottom:1914px;letter-spacing:0.2px;word-spacing:-2px;}
+#t7j_1{left:231px;bottom:1914px;word-spacing:-2.2px;}
+#t7k_1{left:121px;bottom:1887px;letter-spacing:-0.3px;word-spacing:0.3px;}
+#t7l_1{left:121px;bottom:1862px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#t7m_1{left:121px;bottom:1837px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#t7n_1{left:121px;bottom:1810px;letter-spacing:-0.6px;word-spacing:0.4px;}
+#t7o_1{left:121px;bottom:1785px;letter-spacing:-0.3px;word-spacing:0.6px;}
+#t7p_1{left:121px;bottom:1759px;letter-spacing:-0.1px;word-spacing:1.2px;}
+#t7q_1{left:176px;bottom:1733px;letter-spacing:-0.8px;word-spacing:0.9px;}
+#t7r_1{left:176px;bottom:1708px;letter-spacing:-0.8px;}
+#t7s_1{left:176px;bottom:1682px;letter-spacing:-0.2px;word-spacing:0.2px;}
+#t7t_1{left:176px;bottom:1656px;letter-spacing:-0.5px;}
+#t7u_1{left:66px;bottom:1631px;letter-spacing:-2.2px;word-spacing:1.2px;}
+#t7v_1{left:231px;bottom:1631px;}
+#t7w_1{left:121px;bottom:1605px;letter-spacing:-0.3px;word-spacing:1.3px;}
+#t7x_1{left:176px;bottom:1579px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#t7y_1{left:629px;bottom:1579px;letter-spacing:-0.2px;}
+#t7z_1{left:750px;bottom:1579px;letter-spacing:-0.4px;word-spacing:2px;}
+#t80_1{left:176px;bottom:1554px;letter-spacing:-0.5px;word-spacing:0.7px;}
+#t81_1{left:121px;bottom:1528px;letter-spacing:-0.3px;word-spacing:0.6px;}
+#t82_1{left:121px;bottom:1502px;letter-spacing:-0.3px;}
+#t83_1{left:66px;bottom:1477px;letter-spacing:-0.1px;word-spacing:-1.7px;}
+#t84_1{left:228px;bottom:1477px;}
+#t85_1{left:121px;bottom:1451px;}
+#t86_1{left:176px;bottom:1425px;letter-spacing:-0.2px;word-spacing:1.2px;}
+#t87_1{left:176px;bottom:1400px;letter-spacing:-0.5px;}
+#t88_1{left:121px;bottom:1374px;letter-spacing:-0.1px;}
+#t89_1{left:121px;bottom:1348px;letter-spacing:-0.1px;}
+#t8a_1{left:121px;bottom:1323px;}
+#t8b_1{left:66px;bottom:1298px;word-spacing:-0.9px;}
+#t8c_1{left:231px;bottom:1298px;}
+#t8d_1{left:121px;bottom:1271px;letter-spacing:-0.5px;word-spacing:0.4px;}
+#t8e_1{left:66px;bottom:1246px;letter-spacing:0.2px;word-spacing:-0.2px;}
+#t8f_1{left:231px;bottom:1246px;}
+#t8g_1{left:121px;bottom:1220px;letter-spacing:-0.3px;word-spacing:1.3px;}
+#t8h_1{left:121px;bottom:1194px;letter-spacing:-0.3px;word-spacing:0.6px;}
+#t8i_1{left:121px;bottom:1169px;letter-spacing:-0.2px;}
+#t8j_1{left:66px;bottom:1143px;letter-spacing:-0.1px;word-spacing:-0.3px;}
+#t8k_1{left:231px;bottom:1143px;}
+#t8l_1{left:121px;bottom:1117px;letter-spacing:-0.5px;word-spacing:0.8px;}
+#t8m_1{left:121px;bottom:1092px;letter-spacing:-1px;word-spacing:1.5px;}
+#t8n_1{left:121px;bottom:1066px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#t8o_1{left:121px;bottom:1040px;letter-spacing:-0.3px;word-spacing:0.5px;}
+#t8p_1{left:121px;bottom:1015px;letter-spacing:-0.5px;word-spacing:0.5px;}
+#t8q_1{left:121px;bottom:989px;letter-spacing:-0.2px;word-spacing:-0.3px;}
+#t8r_1{left:66px;bottom:964px;letter-spacing:-0.1px;word-spacing:-2.1px;}
+#t8s_1{left:231px;bottom:964px;}
+#t8t_1{left:121px;bottom:938px;letter-spacing:0.2px;}
+#t8u_1{left:176px;bottom:912px;letter-spacing:-0.4px;word-spacing:0.4px;}
+#t8v_1{left:121px;bottom:886px;letter-spacing:0.2px;}
+#t8w_1{left:176px;bottom:861px;letter-spacing:-0.1px;word-spacing:-0.4px;}
+#t8x_1{left:66px;bottom:835px;letter-spacing:-0.2px;word-spacing:-2.2px;}
+#t8y_1{left:231px;bottom:835px;}
+#t8z_1{left:121px;bottom:809px;}
+#t90_1{left:121px;bottom:784px;letter-spacing:-0.5px;word-spacing:2px;}
+#t91_1{left:66px;bottom:759px;letter-spacing:-0.1px;word-spacing:-1.2px;}
+#t92_1{left:236px;bottom:759px;}
+#t93_1{left:121px;bottom:732px;letter-spacing:-0.2px;}
+#t94_1{left:176px;bottom:707px;letter-spacing:-0.1px;word-spacing:-0.2px;}
+#t95_1{left:121px;bottom:681px;}
+#t96_1{left:176px;bottom:655px;letter-spacing:-0.1px;word-spacing:1.4px;}
+#t97_1{left:121px;bottom:630px;letter-spacing:-0.4px;word-spacing:0.7px;}
+#t98_1{left:121px;bottom:604px;letter-spacing:-1.1px;word-spacing:-0.7px;}
+#t99_1{left:121px;bottom:578px;letter-spacing:-0.4px;word-spacing:-0.1px;}
+#t9a_1{left:66px;bottom:553px;}
+#t9b_1{left:231px;bottom:553px;}
+#t9c_1{left:121px;bottom:527px;}
+#t9d_1{left:121px;bottom:501px;letter-spacing:-0.2px;}
+#t9e_1{left:121px;bottom:476px;letter-spacing:-0.4px;word-spacing:-0.6px;}
+#t9f_1{left:66px;bottom:450px;letter-spacing:-0.1px;word-spacing:-1.7px;}
+#t9g_1{left:231px;bottom:450px;}
+#t9h_1{left:121px;bottom:424px;letter-spacing:-0.4px;word-spacing:0.3px;}
+#t9i_1{left:66px;bottom:399px;word-spacing:-0.9px;}
+#t9j_1{left:231px;bottom:399px;}
+#t9k_1{left:121px;bottom:373px;letter-spacing:-0.4px;word-spacing:-0.2px;}
+#t9l_1{left:11px;bottom:340px;letter-spacing:0.1px;word-spacing:-0.1px;}
+#t9m_1{left:11px;bottom:142px;letter-spacing:-0.5px;}
+#t9n_1{left:11px;bottom:5880px;}
+#t9o_1{left:45px;bottom:5880px;letter-spacing:0.1px;}
+#t9p_1{left:66px;bottom:5854px;letter-spacing:0.2px;word-spacing:-0.5px;}
+#t9q_1{left:94px;bottom:5862px;letter-spacing:-0.9px;}
+#t9r_1{left:111px;bottom:5854px;letter-spacing:-0.3px;word-spacing:0.7px;}
+#t9s_1{left:66px;bottom:5828px;letter-spacing:-0.2px;word-spacing:0.6px;}
+#t9t_1{left:66px;bottom:5802px;letter-spacing:-0.2px;word-spacing:2px;}
+#t9u_1{left:40px;bottom:5759px;letter-spacing:0.1px;word-spacing:-1.7px;}
+#t9v_1{left:287px;bottom:5759px;}
+#t9w_1{left:484px;bottom:5759px;letter-spacing:0.1px;word-spacing:-1.9px;}
+#t9x_1{left:742px;bottom:5759px;}
+#t9y_1{left:29px;bottom:5715px;letter-spacing:0.1px;word-spacing:-1.9px;}
+#t9z_1{left:287px;bottom:5714px;}
+#ta0_1{left:541px;bottom:5715px;}
+#ta1_1{left:742px;bottom:5714px;}
+#ta2_1{left:71px;bottom:5670px;letter-spacing:-0.1px;}
+#ta3_1{left:287px;bottom:5670px;}
+#ta4_1{left:527px;bottom:5670px;letter-spacing:-0.2px;}
+#ta5_1{left:742px;bottom:5670px;}
+#ta6_1{left:83px;bottom:292px;letter-spacing:-0.2px;}
+#ta7_1{left:315px;bottom:292px;}
+#ta8_1{left:541px;bottom:292px;letter-spacing:-1px;}
+#ta9_1{left:769px;bottom:292px;}
+#taa_1{left:80px;bottom:248px;letter-spacing:0.7px;}
+#tab_1{left:305px;bottom:248px;letter-spacing:0.1px;}
+#tac_1{left:536px;bottom:248px;}
+#tad_1{left:760px;bottom:248px;letter-spacing:0.2px;}
+#tae_1{left:73px;bottom:203px;letter-spacing:0.1px;}
+#taf_1{left:305px;bottom:203px;letter-spacing:0.1px;}
+#tag_1{left:526px;bottom:203px;}
+#tah_1{left:759px;bottom:203px;letter-spacing:0.2px;}
+#tai_1{left:170px;bottom:94px;letter-spacing:-0.2px;word-spacing:0.4px;}
+#taj_1{left:552px;bottom:94px;letter-spacing:-0.1px;word-spacing:0.8px;}
+
+.s1_1{
+	FONT-SIZE: 146.7px;
+	FONT-FAMILY: Calibri_9;
+	color: rgb(255,255,255);
+}
+
+.s2_1{
+	FONT-SIZE: 110px;
+	FONT-FAMILY: ArialMT_f;
+	color: rgb(32,56,100);
+}
+
+.s3_1{
+	FONT-SIZE: 110px;
+	FONT-FAMILY: Calibri_9;
+	color: rgb(32,56,100);
+}
+
+.s4_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Centaur_g;
+	color: rgb(0,0,0);
+}
+
+.s5_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Centaur_g;
+	color: rgb(5,99,193);
+}
+
+.s6_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri-Bold_n;
+	color: rgb(32,56,100);
+}
+
+.s7_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri-Bold_t;
+	color: rgb(32,56,100);
+}
+
+.s8_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri-Bold_n;
+	color: rgb(47,85,151);
+}
+
+.s9_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri_9;
+	color: rgb(47,85,151);
+}
+
+.s10_1{
+	FONT-SIZE: 57.2px;
+	FONT-FAMILY: Calibri-Bold_n;
+	color: rgb(32,56,100);
+}
+
+.s11_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri-Italic_u;
+	color: rgb(47,85,151);
+}
+
+.s12_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri_-;
+	color: rgb(47,85,151);
+}
+
+.s13_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: CambriaMath_13;
+	color: rgb(47,85,151);
+}
+
+.s14_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri_9;
+	color: rgb(0,0,0);
+}
+
+.s15_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri-BoldItalic_14;
+	color: rgb(47,85,151);
+}
+
+.s16_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri-Italic_u;
+	color: rgb(0,0,0);
+}
+
+.s17_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Calibri_-;
+	color: rgb(0,0,0);
+}
+
+.s18_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: DengXian_1a;
+	color: rgb(0,0,0);
+}
+
+.s19_1{
+	FONT-SIZE: 57.2px;
+	FONT-FAMILY: Calibri_9;
+	color: rgb(47,85,151);
+}
+
+.s20_1{
+	FONT-SIZE: 85.8px;
+	FONT-FAMILY: Centaur_g;
+	color: rgb(47,85,151);
+}
+
+.s21_1{
+	FONT-SIZE: 90.9px;
+	FONT-FAMILY: Centaur_g;
+	color: rgb(0,0,0);
+}
+
+.s22_1{
+	FONT-SIZE: 110px;
+	FONT-FAMILY: Calibri_9;
+	color: rgb(0,0,0);
+}
+
+#form1_1{	z-index: 2;	border-style: none;	padding: 0px;	position: absolute;	left: 743px;	top: 749px;	width: 77px;	height: 20px;	text-align: left;	background: transparent;	font: normal 15px Arial, Helvetica, sans-serif;}
+#form2_1{	z-index: 2;	border-style: none;	padding: 0px;	position: absolute;	left: 277px;	top: 633px;	width: 139px;	height: 22px;	text-align: left;	background: transparent;	font: normal 16px Arial, Helvetica, sans-serif;}
+#form3_1{	z-index: 2;	border-style: none;	padding: 0px;	position: absolute;	left: 272px;	top: 747px;	width: 148px;	height: 22px;	text-align: left;	background: transparent;	font: normal 16px Arial, Helvetica, sans-serif;}
+#form4_1{	z-index: 2;	border-style: none;	padding: 0px;	position: absolute;	left: 683px;	top: 691px;	width: 196px;	height: 22px;	text-align: left;	background: transparent;	font: normal 16px Arial, Helvetica, sans-serif;}
+#form5_1{	z-index: 2;	border-style: none;	padding: 0px;	position: absolute;	left: 249px;	top: 689px;	width: 194px;	height: 23px;	text-align: left;	background: transparent;	font: normal 18px Arial, Helvetica, sans-serif;}
 
 </style>
-</head>
-<body class="light-theme">
-    <div id="left">
-        <div id="left-controls">
-            <button id="btnThumbnails" title="Thumbnails" class="btn"><i class="fa fa-picture-o fa-lg" aria-hidden="true"></i></button>
-            <button id="btnOutlines" title="Bookmarks" class="btn"><i class="fa fa-list-ul fa-lg" aria-hidden="true"></i></button>
-            <button id="btnSearch" title="Search" class="btn"><i class="fa fa-search fa-lg" aria-hidden="true"></i></button>
-        </div>
-        <div id="leftContent">
-            <div id="thumbnailPanel"></div>
-            <div id="outlinePanel"></div>
-            <div id="searchPanel">
-                <input id="searchInput" title="Search" type="text">
-                <label class="searchOption"><input type="checkbox" id="cbMatchCase"> Match case</label>
-                <label class="searchOption"><input type="checkbox" id="cbLimitResults"> Limit results 1 per page</label>
-                <hr>
-                <span id="searchResultsCount"></span>
-                <div id="searchResults"></div>
-            </div>
-        </div>
-    </div>
+<!-- End inline CSS -->
 
-    <div id="main">
-        <div id="controls">
-            <div id="controls-left">
-                <button id="btnSideToggle" title="Sidebar" class="btn"><i class="fa fa-th fa-lg" aria-hidden="true"></i></button>
-                <button id="btnThemeToggle" title="Theme Toggle" class="btn"><i class="fa fa-lightbulb-o fa-lg" aria-hidden="true"></i></button>
-            </div>
+<!-- Begin embedded font definitions -->
+<style id="fonts1" type="text/css" >
 
-            <div id="controls-center">
-                <button id="btnPrev" title="Previous Page" class="btn"><i class="fa fa-caret-left fa-2x" aria-hidden="true"></i></button>
-                <select id="goBtn">
+@font-face {
+	font-family: ArialMT_f;
+	src: url("fonts/ArialMT_f.woff") format("woff");
+}
 
-                </select>
-                <span id="pgCount"></span>
-                <button id="btnNext" title="Next Page" class="btn"><i class="fa fa-caret-right fa-2x" aria-hidden="true"></i></button>
+@font-face {
+	font-family: Calibri-BoldItalic_14;
+	src: url("fonts/Calibri-BoldItalic_14.woff") format("woff");
+}
 
-                <button id="btnSelect" title="Select" class="btn"><i class="fa fa-i-cursor fa-lg" aria-hidden="true"></i></button>
-                <button id="btnMove" title="Pan" class="btn"><i class="fa fa-arrows fa-lg" aria-hidden="true"></i></button>
+@font-face {
+	font-family: Calibri-Bold_n;
+	src: url("fonts/Calibri-Bold_n.woff") format("woff");
+}
 
-                <button id="btnZoomOut" title="Zoom Out" class="btn"><i class="fa fa-minus fa-lg" aria-hidden="true"></i></button>
-                <select id="zoomBtn">
-                    <option value="specific">100%</option>
-                    <option value="actualsize">Actual Size</option>
-                    <option value="fitwidth">Fit Width</option>
-                    <option value="fitheight">Fit Height</option>
-                    <option value="fitpage">Fit Page</option>
-                    <option value="auto">Automatic</option>
+@font-face {
+	font-family: Calibri-Bold_t;
+	src: url("fonts/Calibri-Bold_t.woff") format("woff");
+}
 
-                </select>
-                <button id="btnZoomIn" title="Zoom In" class="btn"><i class="fa fa-plus fa-lg" aria-hidden="true"></i></button>
-            </div>
-            <div id="controls-right">
-                <button id="btnFullScreen" title="Fullscreen" class="btn"><i class="fa fa-arrows-alt fa-lg" aria-hidden="true"></i></button>
-            </div>
-        </div>
+@font-face {
+	font-family: Calibri-Italic_u;
+	src: url("fonts/Calibri-Italic_u.woff") format("woff");
+}
 
-        <div id="idrviewer">
+@font-face {
+	font-family: Calibri_-;
+	src: url("fonts/Calibri_-.woff") format("woff");
+}
 
-        </div>
-    </div>
-    <script src="config.js" type="text/javascript"></script>
-    <script type="text/javascript">IDRViewer.setup();</script>
+@font-face {
+	font-family: Calibri_9;
+	src: url("fonts/Calibri_9.woff") format("woff");
+}
+
+@font-face {
+	font-family: CambriaMath_13;
+	src: url("fonts/CambriaMath_13.woff") format("woff");
+}
+
+@font-face {
+	font-family: Centaur_g;
+	src: url("fonts/Centaur_g.woff") format("woff");
+}
+
+@font-face {
+	font-family: DengXian_1a;
+	src: url("fonts/DengXian_1a.woff") format("woff");
+}
+
+</style>
+<!-- End embedded font definitions -->
+
+<!-- Begin page background -->
+<div id="pg1Overlay" style="width:100%; height:100%; position:absolute; z-index:1; background-color:rgba(0,0,0,0); -webkit-user-select: none;"></div>
+<div id="pg1" style="-webkit-user-select: none;"><object width="909" height="6149" data="1/1.svg" type="image/svg+xml" id="pdf1" style="width:909px; height:6149px; -moz-transform:scale(1); z-index: 0;"></object></div>
+<!-- End page background -->
+
+
+<!-- Begin text definitions (Positioned/styled in CSS) -->
+<div id="t1_1" class="t s1_1">Looking for a computer science internship</div>
+<div id="t2_1" class="t s1_1">During 4 months from Sept. 2019</div>
+<div id="t3_1" class="t s2_1">•</div>
+<div id="t4_1" class="t s3_1">Personal information</div>
+<div id="t5_1" class="t s4_1">Birthday</div>
+<div id="t6_1" class="t s4_1">01.08.1997</div>
+<div id="t7_1" class="t s4_1">Telephone</div>
+<div id="t8_1" class="t s4_1">0033699814399</div>
+<div id="t9_1" class="t s4_1">Adress</div>
+<div id="ta_1" class="t s4_1">Valenciennes, France</div>
+<div id="tb_1" class="t s4_1">Age</div>
+<div id="tc_1" class="t s4_1">21</div>
+<div id="td_1" class="t s4_1">Email</div>
+<div id="te_1" class="t s5_1">lijie97@163.com</div>
+<div id="tf_1" class="t s4_1">Nation</div>
+<div id="tg_1" class="t s4_1">Chinese</div>
+<div id="th_1" class="t s4_1">LinkedIn</div>
+<div id="ti_1" class="t s5_1">Linkedin.com/in/lijie97</div>
+<div id="tj_1" class="t s4_1">Blog</div>
+<div id="tk_1" class="t s5_1">Blog.Chipsalacrevette.xyz</div>
+<div id="tl_1" class="t s4_1">GitHub</div>
+<div id="tm_1" class="t s5_1">github.com/lijie97</div>
+<div id="tn_1" class="t s4_1">Wechat</div>
+<div id="to_1" class="t s5_1">GOCatLi</div>
+<div id="tp_1" class="t s2_1">•</div>
+<div id="tq_1" class="t s3_1">Education</div>
+<div id="tr_1" class="t s6_1">Sept. 2016 </div>
+<div id="ts_1" class="t s7_1">–</div>
+<div id="tt_1" class="t s6_1">Jun. 2021</div>
+<div id="tu_1" class="t s8_1">Ensiame</div>
+<div id="tv_1" class="t s9_1">(INSA Hauts-de-France, Valenciennes, France) </div>
+<div id="tw_1" class="t s9_1">MSc. in Computer Science &amp; Industrial Engineering (Engineer's degree)</div>
+<div id="tx_1" class="t s6_1">Sept. 2015 </div>
+<div id="ty_1" class="t s7_1">–</div>
+<div id="tz_1" class="t s6_1">Jun. 2016</div>
+<div id="t10_1" class="t s8_1">Polytechnic University of Hauts-de-France </div>
+<div id="t11_1" class="t s9_1">(Valenciennes, France)</div>
+<div id="t12_1" class="t s9_1">University degree in French as a foreign language</div>
+<div id="t13_1" class="t s6_1">Sept. 2012 </div>
+<div id="t14_1" class="t s7_1">–</div>
+<div id="t15_1" class="t s6_1">Jun. 2015</div>
+<div id="t16_1" class="t s8_1">Shimen High School </div>
+<div id="t17_1" class="t s9_1">(Guangdong, china)</div>
+<div id="t18_1" class="t s9_1">National Higher Education Entrance Examination</div>
+<div id="t19_1" class="t s9_1">Score : 597/750</div>
+<div id="t1a_1" class="t s9_1">Classment : 31603/321439</div>
+<div id="t1b_1" class="t s2_1">•</div>
+<div id="t1c_1" class="t s3_1">Awards</div>
+<div id="t1d_1" class="t s6_1">2017</div>
+<div id="t1e_1" class="t s6_1">2</div>
+<div id="t1f_1" class="t s10_1">nd</div>
+<div id="t1g_1" class="t s6_1">prize in "Start-up in Jiangsu" Corporate Creation Competition in European Division</div>
+<div id="t1h_1" class="t s9_1">Project: "Medical imaging by hand"</div>
+<div id="t1i_1" class="t s9_1">Slideshow preparation</div>
+<div id="t1j_1" class="t s9_1">Final Roadshow in front of the judges in Paris and China (in live)</div>
+<div id="t1k_1" class="t s6_1">2011</div>
+<div id="t1l_1" class="t s6_1">1</div>
+<div id="t1m_1" class="t s10_1">st</div>
+<div id="t1n_1" class="t s6_1">prize in National Olympiad in Informatics in Provinces</div>
+<div id="t1o_1" class="t s9_1">Junior group</div>
+<div id="t1p_1" class="t s9_1">Language : </div>
+<div id="t1q_1" class="t s11_1">Pascal</div>
+<div id="t1r_1" class="t s9_1">Key points : data structures, backtracking, traversal, Arbitrary Precision Arithmetic, </div>
+<div id="t1s_1" class="t s9_1">Knapsack Problem, Shortest Path, Dynamic Programming, greedy algorithm, Depth-First-Search, </div>
+<div id="t1t_1" class="t s9_1">Breadth-First-</div>
+<div id="t1u_1" class="t s12_1">Search, …</div>
+<div id="t1v_1" class="t s2_1">•</div>
+<div id="t1w_1" class="t s3_1">Professional experience</div>
+<div id="t1x_1" class="t s6_1">Sep. 2018 </div>
+<div id="t1y_1" class="t s7_1">–</div>
+<div id="t1z_1" class="t s6_1">the present</div>
+<div id="t20_1" class="t s8_1">Server operator of virtual private server on bandwagon in company CTJY in Paris</div>
+<div id="t21_1" class="t s9_1">Freelancer</div>
+<div id="t22_1" class="t s9_1">Built a static Website - Maintained the server</div>
+<div id="t23_1" class="t s9_1">technology stack : </div>
+<div id="t24_1" class="t s11_1">Centos 6</div>
+<div id="t25_1" class="t s13_1">→</div>
+<div id="t26_1" class="t s11_1">Apache 2 </div>
+<div id="t27_1" class="t s13_1">→</div>
+<div id="t28_1" class="t s11_1">PHP 5</div>
+<div id="t29_1" class="t s13_1">→</div>
+<div id="t2a_1" class="t s11_1">mySQL</div>
+<div id="t2b_1" class="t s13_1">→</div>
+<div id="t2c_1" class="t s11_1">WordPress </div>
+<div id="t2d_1" class="t s13_1">→</div>
+<div id="t2e_1" class="t s11_1">HTML, CSS, </div>
+<div id="t2f_1" class="t s11_1">JavaScript</div>
+<div id="t2g_1" class="t s6_1">Sep. 2017 </div>
+<div id="t2h_1" class="t s7_1">–</div>
+<div id="t2i_1" class="t s6_1">Aug. 2017</div>
+<div id="t2j_1" class="t s8_1">3D mechanical construction desiner in company Ultouch in Paris</div>
+<div id="t2k_1" class="t s9_1">Internship</div>
+<div id="t2l_1" class="t s9_1">Mechanical construction of the touchscreen showcase with SolidWorks</div>
+<div id="t2m_1" class="t s14_1">Finite element analysis</div>
+<div id="t2n_1" class="t s14_1">Writing of patent application in Chinese</div>
+<div id="t2o_1" class="t s6_1">2016 </div>
+<div id="t2p_1" class="t s7_1">–</div>
+<div id="t2q_1" class="t s6_1">2018 </div>
+<div id="t2r_1" class="t s8_1">Chinese Tutor in Polytechnic University of Hauts-de-France</div>
+<div id="t2s_1" class="t s9_1">student job</div>
+<div id="t2t_1" class="t s9_1">Prepared teaching resources for beginners </div>
+<div id="t2u_1" class="t s9_1">Hosted conversations in Chinese</div>
+<div id="t2v_1" class="t s9_1">Explained the unfamiliar Chinese words or expressions in French</div>
+<div id="t2w_1" class="t s2_1">•</div>
+<div id="t2x_1" class="t s3_1">Projects</div>
+<div id="t2y_1" class="t s15_1">WeChat</div>
+<div id="t2z_1" class="t s8_1">Game - French grammar test</div>
+<div id="t30_1" class="t s9_1">Implementation of a simple sprite system and a pool of recyclable objects</div>
+<div id="t31_1" class="t s9_1">Use of </div>
+<div id="t32_1" class="t s11_1">JavaScript</div>
+<div id="t33_1" class="t s9_1">to develop games in the runtime environment provided by </div>
+<div id="t34_1" class="t s11_1">WeChat</div>
+<div id="t35_1" class="t s9_1">Use of </div>
+<div id="t36_1" class="t s11_1">canvas</div>
+<div id="t37_1" class="t s9_1">for display on the screen.</div>
+<div id="t38_1" class="t s8_1">Manufacturing</div>
+<div id="t39_1" class="t s9_1">CAD</div>
+<div id="t3a_1" class="t s12_1">—</div>
+<div id="t3b_1" class="t s9_1">Construction of 3D mechanical model with </div>
+<div id="t3c_1" class="t s11_1">Catia V5</div>
+<div id="t3d_1" class="t s9_1">Metalworking Practice</div>
+<div id="t3e_1" class="t s9_1">Casting-Molding</div>
+<div id="t3f_1" class="t s9_1">Milling</div>
+<div id="t3g_1" class="t s9_1">CAM Programming the prismatic machining with </div>
+<div id="t3h_1" class="t s11_1">Catia V5</div>
+<div id="t3i_1" class="t s9_1">Use of NUM 760 panel</div>
+<div id="t3j_1" class="t s9_1">Rolling-Welding</div>
+<div id="t3k_1" class="t s8_1">Simple First Person Shooter Game by</div>
+<div id="t3l_1" class="t s15_1">Unity3d</div>
+<div id="t3m_1" class="t s9_1">Design of the game logic in advance.</div>
+<div id="t3n_1" class="t s9_1">Creation of a terrain model and static grass through the terrain editor.</div>
+<div id="t3o_1" class="t s9_1">Creation of characters and enemies with </div>
+<div id="t3p_1" class="t s11_1">avatar</div>
+<div id="t3q_1" class="t s9_1">animation by </div>
+<div id="t3r_1" class="t s11_1">C#</div>
+<div id="t3s_1" class="t s9_1">script with </div>
+<div id="t3t_1" class="t s11_1">MonoDevelop</div>
+<div id="t3u_1" class="t s9_1">integrated in </div>
+<div id="t3v_1" class="t s11_1">Unity.</div>
+<div id="t3w_1" class="t s9_1">Programming the game logic by </div>
+<div id="t3x_1" class="t s11_1">C#</div>
+<div id="t3y_1" class="t s9_1">script</div>
+<div id="t3z_1" class="t s9_1">Design of the additional UI mask and change of the </div>
+<div id="t40_1" class="t s11_1">cameraOfView</div>
+<div id="t41_1" class="t s9_1">to simulate the scope.</div>
+<div id="t42_1" class="t s15_1">WeChat</div>
+<div id="t43_1" class="t s8_1">Game - French grammar test</div>
+<div id="t44_1" class="t s9_1">Implementation of a simple sprite system and a pool of recyclable objects</div>
+<div id="t45_1" class="t s9_1">Use of </div>
+<div id="t46_1" class="t s11_1">JavaScript</div>
+<div id="t47_1" class="t s9_1">to develop games in the runtime environment provided by </div>
+<div id="t48_1" class="t s11_1">WeChat</div>
+<div id="t49_1" class="t s9_1">Use of </div>
+<div id="t4a_1" class="t s11_1">canvas</div>
+<div id="t4b_1" class="t s9_1">for display on the screen.</div>
+<div id="t4c_1" class="t s15_1">Android Class Schedule Application of the University of Valenciennes</div>
+<div id="t4d_1" class="t s9_1">Prototype made with Python</div>
+<div id="t4e_1" class="t s9_1">Main development language : Java</div>
+<div id="t4f_1" class="t s9_1">Development environment : Android Studio on Ubuntu 16</div>
+<div id="t4g_1" class="t s9_1">Implementation method :</div>
+<div id="t4h_1" class="t s9_1">I</div>
+<div id="t4i_1" class="t s14_1">mitating</div>
+<div id="t4j_1" class="t s9_1">the browser connection via </div>
+<div id="t4k_1" class="t s11_1">HttpUrlConnection</div>
+<div id="t4l_1" class="t s9_1">Downloading the </div>
+<div id="t4m_1" class="t s11_1">icalender</div>
+<div id="t4n_1" class="t s9_1">(</div>
+<div id="t4o_1" class="t s11_1">*.ical</div>
+<div id="t4p_1" class="t s9_1">) file</div>
+<div id="t4q_1" class="t s9_1">Performing regular analyzes on the ical file</div>
+<div id="t4r_1" class="t s9_1">Displaying the result on the </div>
+<div id="t4s_1" class="t s11_1">XML</div>
+<div id="t4t_1" class="t s9_1">frontend. </div>
+<div id="t4u_1" class="t s9_1">Implementation user-friendly operations such as drop-down refresh and page </div>
+<div id="t4v_1" class="t s9_1">flipping in the user interface</div>
+<div id="t4w_1" class="t s8_1">Connect 4 with</div>
+<div id="t4x_1" class="t s15_1">Python</div>
+<div id="t4y_1" class="t s9_1">Implementation of </div>
+<div id="t4z_1" class="t s11_1">min-max tree </div>
+<div id="t50_1" class="t s9_1">algorithm for AI</div>
+<div id="t51_1" class="t s9_1">Implementation of UI with </div>
+<div id="t52_1" class="t s11_1">Pygame</div>
+<div id="t53_1" class="t s8_1">Gravity detection development</div>
+<div id="t54_1" class="t s9_1">Realization of electronic compass</div>
+<div id="t55_1" class="t s9_1">P</div>
+<div id="t56_1" class="t s14_1">rogramming with </div>
+<div id="t57_1" class="t s16_1">LabView</div>
+<div id="t58_1" class="t s14_1">with a given accelerator card </div>
+<div id="t59_1" class="t s16_1">ADLS335</div>
+<div id="t5a_1" class="t s14_1">Analysis of required data and display of the result on the </div>
+<div id="t5b_1" class="t s16_1">Front-end panel</div>
+<div id="t5c_1" class="t s8_1">Conveyor belt programming</div>
+<div id="t5d_1" class="t s14_1">Programing automatic conveyor belt with </div>
+<div id="t5e_1" class="t s16_1">SFC</div>
+<div id="t5f_1" class="t s14_1">program on </div>
+<div id="t5g_1" class="t s16_1">UnityPro</div>
+<div id="t5h_1" class="t s14_1">(</div>
+<div id="t5i_1" class="t s16_1">Schneider</div>
+<div id="t5j_1" class="t s14_1">)</div>
+<div id="t5k_1" class="t s8_1">Mathematical modeling of servo system diagnostics </div>
+<div id="t5l_1" class="t s14_1">Mathematical modeling based on Frequency Domain Servo System Characterization with </div>
+<div id="t5m_1" class="t s14_1">least recursive square.</div>
+<div id="t5n_1" class="t s14_1">Use of artificial neural network to give a prediction on time domain</div>
+<div id="t5o_1" class="t s14_1">Implementation of a demo to check the algorithm with </div>
+<div id="t5p_1" class="t s16_1">R</div>
+<div id="t5q_1" class="t s14_1">language</div>
+<div id="t5r_1" class="t s14_1">Implementation with </div>
+<div id="t5s_1" class="t s16_1">LabView</div>
+<div id="t5t_1" class="t s14_1">to get the measured data of the real time. </div>
+<div id="t5u_1" class="t s14_1">Training of Artificial neural network and trained by simulation of the recurrence equation </div>
+<div id="t5v_1" class="t s14_1">with </div>
+<div id="t5w_1" class="t s16_1">Matlab</div>
+<div id="t5x_1" class="t s14_1">and </div>
+<div id="t5y_1" class="t s16_1">nntool</div>
+<div id="t5z_1" class="t s14_1">.</div>
+<div id="t60_1" class="t s8_1">A small web service programmed with </div>
+<div id="t61_1" class="t s15_1">Python</div>
+<div id="t62_1" class="t s14_1">Realization of posting text on the server.</div>
+<div id="t63_1" class="t s17_1">Verification of the state by "session“.</div>
+<div id="t64_1" class="t s14_1">Implementation of CRUD</div>
+<div id="t65_1" class="t s9_1">Technology stack : </div>
+<div id="t66_1" class="t s11_1">Ubuntu 14</div>
+<div id="t67_1" class="t s13_1">→</div>
+<div id="t68_1" class="t s11_1">Apache 2 </div>
+<div id="t69_1" class="t s13_1">→</div>
+<div id="t6a_1" class="t s11_1">Python</div>
+<div id="t6b_1" class="t s13_1">→</div>
+<div id="t6c_1" class="t s16_1">Flask</div>
+<div id="t6d_1" class="t s13_1">→</div>
+<div id="t6e_1" class="t s16_1">SQLite</div>
+<div id="t6f_1" class="t s13_1">→</div>
+<div id="t6g_1" class="t s16_1">Jinja2 </div>
+<div id="t6h_1" class="t s13_1">→</div>
+<div id="t6i_1" class="t s16_1">HTML, </div>
+<div id="t6j_1" class="t s16_1">CSS, JavaScript</div>
+<div id="t6k_1" class="t s8_1">A simple mesh viewer programmed with </div>
+<div id="t6l_1" class="t s15_1">OpenGL</div>
+<div id="t6m_1" class="t s14_1">A mesh viewer for the Object File Format(</div>
+<div id="t6n_1" class="t s16_1">*.OFF</div>
+<div id="t6o_1" class="t s14_1">)</div>
+<div id="t6p_1" class="t s14_1">Language: C++</div>
+<div id="t6q_1" class="t s14_1">Analysis of document *.OFF</div>
+<div id="t6r_1" class="t s14_1">Rebuilding of the triangle mesh</div>
+<div id="t6s_1" class="t s14_1">Use of built-in functions of OpenGL for different renders and shaders.</div>
+<div id="t6t_1" class="t s8_1">Design of the logic circuit of a timer</div>
+<div id="t6u_1" class="t s14_1">Analysis with Karnaugh map for combinational logic circuit</div>
+<div id="t6v_1" class="t s14_1">Use of JK latch for sequence generator</div>
+<div id="t6w_1" class="t s14_1">Use of Grafcet to simplify the design of JK latches circuit</div>
+<div id="t6x_1" class="t s2_1">•</div>
+<div id="t6y_1" class="t s3_1">Skills</div>
+<div id="t6z_1" class="t s8_1">Algorithm : </div>
+<div id="t70_1" class="t s18_1">★★★★★★★☆☆☆</div>
+<div id="t71_1" class="t s9_1">Simulation algorithm, Monte Carlo method, Genetic algorithm</div>
+<div id="t72_1" class="t s9_1">Greedy algorithm, Simulated annealing</div>
+<div id="t73_1" class="t s9_1">Sorting, Searching, R*, Dijkstra, DFS, BFS, DP</div>
+<div id="t74_1" class="t s9_1">Support vector machine</div>
+<div id="t75_1" class="t s9_1">Linear regression</div>
+<div id="t76_1" class="t s9_1">Artificial Neural Network</div>
+<div id="t77_1" class="t s9_1">Convolutional Neural Network</div>
+<div id="t78_1" class="t s9_1">Recurrent neural network</div>
+<div id="t79_1" class="t s9_1">Long short-term memory</div>
+<div id="t7a_1" class="t s8_1">Data Structure : </div>
+<div id="t7b_1" class="t s18_1">★★★★★★★☆☆☆</div>
+<div id="t7c_1" class="t s9_1">Array, Queue, Stack</div>
+<div id="t7d_1" class="t s9_1">Linked storage structure</div>
+<div id="t7e_1" class="t s9_1">Hash table </div>
+<div id="t7f_1" class="t s9_1">Graph, Tree, Heap</div>
+<div id="t7g_1" class="t s9_1">Sparse matrices</div>
+<div id="t7h_1" class="t s9_1">Tensor</div>
+<div id="t7i_1" class="t s8_1">Python : </div>
+<div id="t7j_1" class="t s18_1">★★★★★★★ ☆☆☆</div>
+<div id="t7k_1" class="t s9_1">Object-oriented programming, magic method</div>
+<div id="t7l_1" class="t s9_1">Pythonic programming, Duck typing, Aspect Oriented Programming</div>
+<div id="t7m_1" class="t s9_1">Fuctional programming, pipelines type</div>
+<div id="t7n_1" class="t s9_1">Decorator, yield, closure, contextor, annotation</div>
+<div id="t7o_1" class="t s9_1">Standard library</div>
+<div id="t7p_1" class="t s9_1">Extension library</div>
+<div id="t7q_1" class="t s9_1">Numpy, OpenCV, matplotlib</div>
+<div id="t7r_1" class="t s9_1">Tensorflow</div>
+<div id="t7s_1" class="t s9_1">Django, Flask</div>
+<div id="t7t_1" class="t s9_1">Pygame</div>
+<div id="t7u_1" class="t s8_1">JAVA : </div>
+<div id="t7v_1" class="t s18_1">★★★★★☆☆☆☆☆</div>
+<div id="t7w_1" class="t s9_1">Object-oriented programming</div>
+<div id="t7x_1" class="t s9_1">Inheritance, overriding, polymorphism, abstraction, </div>
+<div id="t7y_1" class="t s14_1">encapsulation</div>
+<div id="t7z_1" class="t s9_1">, interfaces</div>
+<div id="t80_1" class="t s9_1">Fatory pattern, Singleton Pattern</div>
+<div id="t81_1" class="t s9_1">Standard library</div>
+<div id="t82_1" class="t s9_1">Android development</div>
+<div id="t83_1" class="t s8_1">Server Operation :</div>
+<div id="t84_1" class="t s18_1">★★★☆☆☆☆☆☆☆</div>
+<div id="t85_1" class="t s9_1">Linux-Bash</div>
+<div id="t86_1" class="t s9_1">Ubuntu server</div>
+<div id="t87_1" class="t s9_1">Centos</div>
+<div id="t88_1" class="t s9_1">Vi/Vim</div>
+<div id="t89_1" class="t s9_1">EPEl</div>
+<div id="t8a_1" class="t s9_1">Git/GitHub</div>
+<div id="t8b_1" class="t s8_1">C :</div>
+<div id="t8c_1" class="t s18_1">★★★★★★☆☆☆☆</div>
+<div id="t8d_1" class="t s9_1">Pointer, structure, malloc, file I/O</div>
+<div id="t8e_1" class="t s8_1">C++ :</div>
+<div id="t8f_1" class="t s18_1">★★★★☆☆☆☆☆☆</div>
+<div id="t8g_1" class="t s9_1">Object-oriented programming</div>
+<div id="t8h_1" class="t s9_1">Standard library</div>
+<div id="t8i_1" class="t s9_1">OpenGL</div>
+<div id="t8j_1" class="t s8_1">Unity :</div>
+<div id="t8k_1" class="t s18_1">★★★★☆☆☆☆☆☆</div>
+<div id="t8l_1" class="t s14_1">Physx Physics engine</div>
+<div id="t8m_1" class="t s9_1">Terrain Editor</div>
+<div id="t8n_1" class="t s9_1">JS/C# Scrpit</div>
+<div id="t8o_1" class="t s9_1">Default Render/Shader</div>
+<div id="t8p_1" class="t s9_1">Avatar anime</div>
+<div id="t8q_1" class="t s9_1">Mobile development</div>
+<div id="t8r_1" class="t s8_1">Database :</div>
+<div id="t8s_1" class="t s18_1">★★★★☆☆☆☆☆☆</div>
+<div id="t8t_1" class="t s9_1">SQL</div>
+<div id="t8u_1" class="t s9_1">Select, join, order, contraints, functions</div>
+<div id="t8v_1" class="t s9_1">NoSQL</div>
+<div id="t8w_1" class="t s9_1">Json, mongoDB</div>
+<div id="t8x_1" class="t s8_1">Front-end :</div>
+<div id="t8y_1" class="t s18_1">★★★☆☆☆☆☆☆☆</div>
+<div id="t8z_1" class="t s9_1">HTML5, CSS2</div>
+<div id="t90_1" class="t s9_1">Javascrpit, canvas</div>
+<div id="t91_1" class="t s8_1">Data analysis :</div>
+<div id="t92_1" class="t s18_1">★★★★★★☆☆☆☆</div>
+<div id="t93_1" class="t s9_1">Matlab</div>
+<div id="t94_1" class="t s9_1">Simulink, nntool</div>
+<div id="t95_1" class="t s9_1">R</div>
+<div id="t96_1" class="t s9_1">Pipelines type</div>
+<div id="t97_1" class="t s9_1">Scilab, NumPy, Panda, Octave, Mathematica, LabView</div>
+<div id="t98_1" class="t s9_1">Tensorflow, Cuda</div>
+<div id="t99_1" class="t s9_1">Reinforcement learning</div>
+<div id="t9a_1" class="t s8_1">CAD/CAM:</div>
+<div id="t9b_1" class="t s18_1">★★★★★☆☆☆☆☆</div>
+<div id="t9c_1" class="t s9_1">CSG/DSG</div>
+<div id="t9d_1" class="t s9_1">Catia/Solidworks</div>
+<div id="t9e_1" class="t s9_1">formula parameterization</div>
+<div id="t9f_1" class="t s8_1">Graphic design :</div>
+<div id="t9g_1" class="t s18_1">★★★★★☆☆☆☆☆</div>
+<div id="t9h_1" class="t s14_1">Photoshop, Illustrator, Premiere, inkSpace, MS visio, Sketch Up</div>
+<div id="t9i_1" class="t s8_1">Office work :</div>
+<div id="t9j_1" class="t s18_1">★★★★★★★★☆☆</div>
+<div id="t9k_1" class="t s14_1">Office Word, Office PowerPoint, Office Excel, Office OneNote</div>
+<div id="t9l_1" class="t s3_1">Language :</div>
+<div id="t9m_1" class="t s3_1">Interests :</div>
+<div id="t9n_1" class="t s2_1">•</div>
+<div id="t9o_1" class="t s3_1">Summary</div>
+<div id="t9p_1" class="t s9_1">A 3</div>
+<div id="t9q_1" class="t s19_1">rd</div>
+<div id="t9r_1" class="t s9_1">grade engineering student working on the combination of computer technology, data </div>
+<div id="t9s_1" class="t s9_1">science and industrial information, with hope to be able to face various challenges with </div>
+<div id="t9t_1" class="t s9_1">interdisciplinary knowledge.</div>
+<div id="t9u_1" class="t s20_1">Computer science :</div>
+<div id="t9v_1" class="t s18_1">★★★★★</div>
+<div id="t9w_1" class="t s20_1">Industrial informatics</div>
+<div id="t9x_1" class="t s18_1">★★★★☆</div>
+<div id="t9y_1" class="t s20_1">Industrial engineering</div>
+<div id="t9z_1" class="t s18_1">★★★★☆</div>
+<div id="ta0_1" class="t s4_1">Design</div>
+<div id="ta1_1" class="t s18_1">★★★★☆</div>
+<div id="ta2_1" class="t s4_1">Electronics</div>
+<div id="ta3_1" class="t s18_1">★★★☆☆</div>
+<div id="ta4_1" class="t s4_1">Mechanics</div>
+<div id="ta5_1" class="t s18_1">★★★☆☆</div>
+<div id="ta6_1" class="t s21_1">English</div>
+<div id="ta7_1" class="t s21_1">Fluent</div>
+<div id="ta8_1" class="t s21_1">French</div>
+<div id="ta9_1" class="t s21_1">Fluent</div>
+<div id="taa_1" class="t s21_1">German</div>
+<div id="tab_1" class="t s21_1">Beginner</div>
+<div id="tac_1" class="t s21_1">Spanish</div>
+<div id="tad_1" class="t s21_1">Beginner</div>
+<div id="tae_1" class="t s21_1">Mandarin</div>
+<div id="taf_1" class="t s21_1">Bilingual</div>
+<div id="tag_1" class="t s21_1">Cantonese</div>
+<div id="tah_1" class="t s21_1">Bilingual</div>
+<div id="tai_1" class="t s22_1">Indie games production</div>
+<div id="taj_1" class="t s22_1">Music composition</div>
+
+<!-- End text definitions -->
+
+
+<!-- Begin Form Data -->
+<form>
+<input id="form1_1" type="button" tabindex="5" data-objref="22 0 R"/>
+<input id="form2_1" type="button" tabindex="1" data-objref="18 0 R"/>
+<input id="form3_1" type="button" tabindex="4" data-objref="21 0 R"/>
+<input id="form4_1" type="button" tabindex="3" data-objref="20 0 R"/>
+<input id="form5_1" type="button" tabindex="2" data-objref="19 0 R"/>
+
+</form>
+<!-- End Form Data -->
+
+</div>
 </body>
 </html>
